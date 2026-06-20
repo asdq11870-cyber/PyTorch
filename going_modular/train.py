@@ -1,41 +1,12 @@
 import torch
 import os
+import yaml
 from going_modular import utils, transforms, engine, data_setup, model_builder
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
 #Setup Hyperparameters
-
-CONFIG = {
-    # ---- TRAINING ----
-    "NUM_EPOCHS": 5,
-    "BATCH_SIZE": 32,
-    "HIDDEN_UNITS": 10,
-    "LEARNING_RATE": 0.001,
-
-    # ---- OPTIMIZATION ----
-    "WEIGHT_DECAY": 0.0,
-    "MOMENTUM": 0.0,  # only used if you switch to SGD later
-    "OPTIMIZER_TYPE": "adam",  # allows swapping optimizers later
-    "LOSS_FN": "cross_entropy",
-
-    # ---- TRAINING BEHAVIOUR ----
-    "DIVISOR": 1,  # logging frequency
-    "LOSS_CURVES": True,
-
-    # ---- DATA ----
-    "IMG_SIZE": 64,
-    "AUGMENTATION": False,
-    "AUG_SCALE": 31,
-    "NORMALISE": False,
-    "MEAN": 0.0,
-    "STD": 0.0,
-
-    # ---- PATHS ----
-    "TRAIN_DIR": "data/watch_shoe_fragrance/train",
-    "TEST_DIR": "data/watch_shoe_fragrance/test",
-    "TARGET_DIR": "models",
-    "MODEL_NAME": "05_going_modular_script_mode_tinyvgg_model.pth"
-}
+with open("config.yaml", "r") as f:
+    CONFIG = yaml.safe_load(f)
 
 data_transform = transforms.create_data_transforms(
     size=CONFIG["IMG_SIZE"],
@@ -104,7 +75,7 @@ loss_fn_map = {
 
 loss_fn = loss_fn_map[CONFIG["LOSS_FN"]]()
 
-optimiser = optimizer_map[CONFIG["OPTIMIZER"]](
+optimiser = optimizer_map[CONFIG["OPTIMISER"]](
     model.parameters(),
     lr=CONFIG["LEARNING_RATE"]
 )
