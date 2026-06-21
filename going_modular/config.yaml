@@ -11,8 +11,8 @@ IMG_SIZE: 224
 AUGMENTATION: false
 AUG_SCALE: 31
 NORMALISE: false
-MEAN: 0.0
-STD: 1.0
+MEAN: [0.0,0.0,0.0]
+STD: [0.0,0.0,0.0]
 
 TRAIN_DIR: data/watch_shoe_fragrance/train
 TEST_DIR: data/watch_shoe_fragrance/test
