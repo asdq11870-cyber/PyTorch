@@ -1,7 +1,8 @@
 from torchvision import transforms
 
 def create_data_transforms(
-    size,
+    height,
+    width,
     augmentation=False,
     aug_scale=31,
     normalise=False,
@@ -23,7 +24,7 @@ def create_data_transforms(
 
 
     transform_list = [
-        transforms.Resize(size)
+        transforms.Resize((height,width))
     ]
 
     if augmentation:

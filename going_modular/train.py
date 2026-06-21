@@ -9,7 +9,8 @@ with open("config.yaml", "r") as f:
     CONFIG = yaml.safe_load(f)
 
 data_transform = transforms.create_data_transforms(
-    size=CONFIG["IMG_SIZE"],
+    height=CONFIG["IMG_HEIGHT"],
+    width=CONFIG["IMG_WIDTH"],
     augmentation=CONFIG["AUGMENTATION"],
     aug_scale=CONFIG["AUG_SCALE"],
     normalise=CONFIG["NORMALISE"],
