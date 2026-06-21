@@ -28,7 +28,7 @@ def create_data_transforms(
 
     if augmentation:
         transform_list.extend([
-            transforms.RandomHorizontalFlip(),
+            transforms.RandomHorizontalFlip(p=0.5),
             transforms.RandomRotation(15),
             transforms.TrivialAugmentWide(
                 num_magnitude_bins=aug_scale
