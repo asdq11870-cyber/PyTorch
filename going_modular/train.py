@@ -8,7 +8,8 @@ device = "cuda" if torch.cuda.is_available() else "cpu"
 with open("config.yaml", "r") as f:
     CONFIG = yaml.safe_load(f)
 
-data_transform = transforms.create_data_transforms(
+if data_transform is not None:
+    data_transform = transforms.create_data_transforms(
     height=CONFIG["IMG_HEIGHT"],
     width=CONFIG["IMG_WIDTH"],
     augmentation=CONFIG["AUGMENTATION"],
@@ -16,7 +17,9 @@ data_transform = transforms.create_data_transforms(
     normalise=CONFIG["NORMALISE"],
     mean=CONFIG["MEAN"],
     std=CONFIG["STD"]
-)
+    )
+
+
 
 train_dataloader, test_dataloader, class_names = data_setup.create_dataloaders(
     train_dir=CONFIG["TRAIN_DIR"],
