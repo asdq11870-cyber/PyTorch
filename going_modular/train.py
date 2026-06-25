@@ -29,11 +29,12 @@ train_dataloader, test_dataloader, class_names = data_setup.create_dataloaders(
 )
 
 # Create model with help from model_builder.py
-model = model_builder.TinyVGG(
-    input_shape=3,
-    hidden_units=CONFIG["HIDDEN_UNITS"],
-    output_shape=len(class_names)
-).to(device)
+if model is not None:
+    model = model_builder.TinyVGG(
+        input_shape=3,
+        hidden_units=CONFIG["HIDDEN_UNITS"],
+        output_shape=len(class_names)
+    ).to(device)
 
 # Set loss and optimizer
 
