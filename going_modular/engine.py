@@ -1,5 +1,6 @@
 import torch
 import matplotlib.pyplot as plt
+from timeit import default_timer as timer
 def batch_train(model:torch.nn.Module,
                 train_data_loader:torch.utils.data.DataLoader,
                 test_data_loader:torch.utils.data.DataLoader,
@@ -28,6 +29,7 @@ def batch_train(model:torch.nn.Module,
   Returns:
     Nothing
   """
+  start = timer()
   patience = 10
   overfit_counter = 0
   epochs_no_imp = 0
@@ -89,9 +91,14 @@ def batch_train(model:torch.nn.Module,
       if(epochs_no_imp >= patience):
           print("Loss is stagnant. Prematurely ending training!")
           break
+      
+      end = timer()
+      print(f"Total Training Time: {end-start}:.2f seconds")
+    
 
   if loss_curves:
       plot_loss_curves(results)
+
 
 def detect_overfitting(results,epoch:int,overfit_counter:int):
 
