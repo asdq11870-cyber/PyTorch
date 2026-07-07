@@ -1,4 +1,4 @@
-from torchvision import transforms
+from torchvision import transforms # pyright: ignore[reportMissingImports]
 
 def create_data_transforms(
     height,

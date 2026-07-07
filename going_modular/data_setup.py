@@ -1,13 +1,14 @@
-import torch
-from torch.utils.data import DataLoader
-from torchvision import transforms, datasets
+import torch # pyright: ignore[reportMissingImports]
+from torch.utils.data import DataLoader  # type: ignore
+from torchvision import transforms, datasets # type: ignore
 import os
 NUM_WORKERS = os.cpu_count()
 
 def create_dataloaders(
     train_dir: str,
     test_dir: str,
-    transform: transforms.Compose,
+    train_transform: transforms.Compose,
+    test_transform: transforms.Compose,
     batch_size: int,
     num_workers: int=NUM_WORKERS
 ):
@@ -34,11 +35,11 @@ def create_dataloaders(
   """
 
   train_dataset = datasets.ImageFolder(
-      root=train_dir, transform=transform,
+      root=train_dir, transform=train_transform,
 
   )
   test_dataset = datasets.ImageFolder(
-      root=test_dir, transform=transform,
+      root=test_dir, transform=test_transform,
 
   )
 

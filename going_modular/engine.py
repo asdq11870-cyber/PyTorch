@@ -1,4 +1,4 @@
-import torch
+import torch # pyright: ignore[reportMissingImports]
 import matplotlib.pyplot as plt
 from timeit import default_timer as timer
 def batch_train(model:torch.nn.Module,

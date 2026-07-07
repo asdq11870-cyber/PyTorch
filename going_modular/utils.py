@@ -2,7 +2,7 @@ import os
 from pathlib import Path
 import zipfile
 import requests
-import torch
+import torch # pyright: ignore[reportMissingImports]
 
 def saving_model(model:torch.nn.Module, model_name:str, target_dir:str):
   """

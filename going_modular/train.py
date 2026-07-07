@@ -1,15 +1,15 @@
-import torch
+import torch # pyright: ignore[reportMissingImports]
 import os
 import yaml
-from going_modular import utils, transforms, engine, data_setup, model_builder
+from going_modular import transformations, utils, engine, data_setup, model_builder
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
 #Setup Hyperparameters
 with open("config.yaml", "r") as f:
     CONFIG = yaml.safe_load(f)
 
-if data_transform is not None:
-    data_transform = transforms.create_data_transforms(
+if train_transform is not None:
+    train_transform = transformations.create_data_transforms(
     height=CONFIG["IMG_HEIGHT"],
     width=CONFIG["IMG_WIDTH"],
     augmentation=CONFIG["AUGMENTATION"],
@@ -19,12 +19,19 @@ if data_transform is not None:
     std=CONFIG["STD"]
     )
 
+if test_transform is not None:
+    test_transform = transformations.create_data_transforms(
+        height=CONFIG["IMG_HEIGHT"],
+        width=CONFIG["IMG_WIDTH"]
+    )
+
 
 
 train_dataloader, test_dataloader, class_names = data_setup.create_dataloaders(
     train_dir=CONFIG["TRAIN_DIR"],
     test_dir=CONFIG["TEST_DIR"],
-    transform=data_transform,
+    train_transform=train_transform,
+    test_transform=test_transform,
     batch_size=CONFIG["BATCH_SIZE"]
 )
 
