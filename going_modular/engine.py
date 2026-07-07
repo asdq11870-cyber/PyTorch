@@ -1,6 +1,8 @@
 import torch # pyright: ignore[reportMissingImports]
 import matplotlib.pyplot as plt
 from timeit import default_timer as timer
+from torch.utils.tensorboard import SummaryWriter # pyright: ignore[reportMissingImports]
+
 def batch_train(model:torch.nn.Module,
                 train_data_loader:torch.utils.data.DataLoader,
                 test_data_loader:torch.utils.data.DataLoader,
@@ -9,7 +11,8 @@ def batch_train(model:torch.nn.Module,
                 device:torch.device,
                 loss_curves:bool,
                 optimiser:torch.optim,
-                loss_fn:torch.nn):
+                loss_fn:torch.nn,
+                writer: torch.utils.tensorboard.SummaryWriter):
   """
   Function for training batches of data using dataloaders
 
@@ -25,6 +28,8 @@ def batch_train(model:torch.nn.Module,
     loss_curves: Determines if at the end loss curves are shown or not
     optimiser: Used for gradient descent
     loss_fn: Used for backpropagation and calculating loss
+    writer: This tensorboard summary writer is for writing files and uploading
+    them to tensorboard
 
   Returns:
     Nothing
@@ -41,6 +46,11 @@ def batch_train(model:torch.nn.Module,
       "test_loss": [],
       "test_acc": []
   }
+
+  writer.add_graph(
+    model=model,
+    input_to_model=torch.randn(32,3,224,224).to(device)
+  )
 
   for epoch in range(epochs):
       print(f"Epoch: {epoch+1} \n ---------------------------------------------------------")
@@ -92,9 +102,28 @@ def batch_train(model:torch.nn.Module,
           print("Loss is stagnant. Prematurely ending training!")
           break
       
+      writer.add_scalars(
+          main_tag="Loss",
+          tag_scalar_dict={
+              "train_loss":train_loss,
+              "test_loss":test_loss
+          },
+          global_step=epoch
+      )
+
+      writer.add_scalars(
+          main_tag="Accuracy",
+          tag_scalar_dict={
+              "train_acc":train_acc,
+              "test_acc":test_acc
+          },
+          global_step=epoch
+      )
+
+      
+  writer.close()
   end = timer()
   print(f"Total Training Time: {end-start:.2f} seconds")
-    
 
   if loss_curves:
       plot_loss_curves(results)

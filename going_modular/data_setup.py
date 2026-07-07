@@ -24,7 +24,8 @@ def create_dataloaders(
   Args:
     train_dir: Directory which contains all the training data
     test_dir: Directory which contains all the testing data
-    transform: A transformation that can be applied to the dataloader
+    train_transform: A transformation that can be applied to the train dataloader
+    test_transform: A transformation that can be applied to the test dataloader
     batch_size: The amount of data that is funneled into the batch function
     num_workers: The number of cpu cores working on the dataloader
 
