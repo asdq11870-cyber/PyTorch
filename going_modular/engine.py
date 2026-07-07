@@ -47,10 +47,11 @@ def batch_train(model:torch.nn.Module,
       "test_acc": []
   }
 
-  writer.add_graph(
-    model=model,
-    input_to_model=torch.randn(32,3,224,224).to(device)
-  )
+  if writer is not None:
+   writer.add_graph(
+     model=model,
+     input_to_model=torch.randn(32,3,224,224).to(device)
+   )
 
   for epoch in range(epochs):
       print(f"Epoch: {epoch+1} \n ---------------------------------------------------------")
@@ -102,26 +103,26 @@ def batch_train(model:torch.nn.Module,
           print("Loss is stagnant. Prematurely ending training!")
           break
       
-      writer.add_scalars(
-          main_tag="Loss",
-          tag_scalar_dict={
-              "train_loss":train_loss,
-              "test_loss":test_loss
-          },
-          global_step=epoch
-      )
+      if writer is not None:
+       writer.add_scalars(
+           main_tag="Loss",
+           tag_scalar_dict={
+               "train_loss":train_loss,
+               "test_loss":test_loss
+           },
+           global_step=epoch
+       )
 
-      writer.add_scalars(
-          main_tag="Accuracy",
-          tag_scalar_dict={
-              "train_acc":train_acc,
-              "test_acc":test_acc
-          },
-          global_step=epoch
-      )
-
+       writer.add_scalars(
+           main_tag="Accuracy",
+           tag_scalar_dict={
+               "train_acc":train_acc,
+               "test_acc":test_acc
+           },
+           global_step=epoch
+       )
       
-  writer.close()
+  if writer is not None: writer.close()
   end = timer()
   print(f"Total Training Time: {end-start:.2f} seconds")
 
