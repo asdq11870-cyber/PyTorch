@@ -92,8 +92,8 @@ def batch_train(model:torch.nn.Module,
           print("Loss is stagnant. Prematurely ending training!")
           break
       
-      end = timer()
-      print(f"Total Training Time: {end-start}:.2f seconds")
+  end = timer()
+  print(f"Total Training Time: {end-start}:.2f seconds")
     
 
   if loss_curves:
