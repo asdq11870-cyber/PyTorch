@@ -7,8 +7,9 @@ NUM_WORKERS = os.cpu_count()
 def create_dataloaders(
     train_dir: str,
     test_dir: str,
+    val_dir: str,
     train_transform: transforms.Compose,
-    test_transform: transforms.Compose,
+    test_and_val_transform: transforms.Compose,
     batch_size: int,
     num_workers: int=NUM_WORKERS
 ):
@@ -23,6 +24,7 @@ def create_dataloaders(
 
   Args:
     train_dir: Directory which contains all the training data
+    val_dir: Directory which contains all the validating data
     test_dir: Directory which contains all the testing data
     train_transform: A transformation that can be applied to the train dataloader
     test_transform: A transformation that can be applied to the test dataloader
@@ -31,16 +33,21 @@ def create_dataloaders(
 
   Returns:
     train_dataloader: The dataloader that funnels the training information
+    val_dataloader: The dataloader that funnels the validating information
     test_dataloader: The dataloader that funnels the testing information
     class_names: The names of the classes in the dataset
   """
 
   train_dataset = datasets.ImageFolder(
       root=train_dir, transform=train_transform,
-
   )
+
+  val_dataset = datasets.ImageFolder(
+      root=val_dir, transform=test_and_val_transform
+  )
+
   test_dataset = datasets.ImageFolder(
-      root=test_dir, transform=test_transform,
+      root=test_dir, transform=test_and_val_transform,
 
   )
 
@@ -49,6 +56,14 @@ def create_dataloaders(
       batch_size=batch_size,
       num_workers=num_workers,
       shuffle=True,
+      pin_memory=True
+  )
+
+  val_dataloader = DataLoader(
+      dataset=val_dataset,
+      batch_size=batch_size,
+      num_workers=num_workers,
+      shuffle=False,
       pin_memory=True
   )
 
@@ -62,4 +77,4 @@ def create_dataloaders(
 
   class_names = train_dataset.classes
 
-  return train_dataloader, test_dataloader, class_names
+  return train_dataloader, val_dataloader, test_dataloader, class_names

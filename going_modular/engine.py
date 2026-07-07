@@ -5,6 +5,7 @@ from torch.utils.tensorboard import SummaryWriter # pyright: ignore[reportMissin
 
 def batch_train(model:torch.nn.Module,
                 train_data_loader:torch.utils.data.DataLoader,
+                val_data_loader:torch.utils.data.DataLoader,
                 test_data_loader:torch.utils.data.DataLoader,
                 epochs:int,
                 divisor:int,
@@ -12,16 +13,17 @@ def batch_train(model:torch.nn.Module,
                 loss_curves:bool,
                 optimiser:torch.optim,
                 loss_fn:torch.nn,
-                writer: torch.utils.tensorboard.SummaryWriter):
+                writer: torch.utils.tensorboard.SummaryWriter | None):
   """
   Function for training batches of data using dataloaders
 
   Each batch is iterative given to the function to be experimented
-  on and then tested on.
+  on and then valed on.
 
   Args:
-    model: The model being tested
+    model: The model being valed
     train_data_loader: The dataloader that contains the training data
+    val_data_loader: The dataloader that contains the validating data
     test_data_loader: The dataloader that contains the testing data
     epochs: The amount of times the data is trained for
     divisor: Determines how much information is shown
@@ -43,8 +45,8 @@ def batch_train(model:torch.nn.Module,
   results = {
       "train_loss": [],
       "train_acc": [],
-      "test_loss": [],
-      "test_acc": []
+      "val_loss": [],
+      "val_acc": []
   }
 
   if writer is not None:
@@ -75,27 +77,27 @@ def batch_train(model:torch.nn.Module,
       train_loss /= len(train_data_loader)
       train_acc = 100 * (train_correct / train_total)
 
-      test_loss, test_correct, test_total = 0.0,0,0
+      val_loss, val_correct, val_total = 0.0,0,0
       model.eval()
       with torch.inference_mode():
-          for x,y in test_data_loader:
+          for x,y in val_data_loader:
               x,y = x.to(device), y.to(device)
-              test_logits = model(x)
-              test_loss += loss_fn(test_logits, y).item()
-              test_pred_labels = test_logits.argmax(dim=1)
-              test_correct += (test_pred_labels == y).sum().item()
-              test_total += y.size(0)
+              val_logits = model(x)
+              val_loss += loss_fn(val_logits, y).item()
+              val_pred_labels = val_logits.argmax(dim=1)
+              val_correct += (val_pred_labels == y).sum().item()
+              val_total += y.size(0)
 
-          test_loss /= len(test_data_loader)
-          test_acc = 100 * (test_correct / test_total)
+          val_loss /= len(val_data_loader)
+          val_acc = 100 * (val_correct / val_total)
 
       results["train_loss"].append(train_loss)
       results["train_acc"].append(train_acc)
-      results["test_loss"].append(test_loss)
-      results["test_acc"].append(test_acc)
+      results["val_loss"].append(val_loss)
+      results["val_acc"].append(val_acc)
 
       if epoch % divisor == 0:
-          print(f"\nTrain loss: {train_loss:.5f} | Train acc: {train_acc:.2f}% | Test loss: {test_loss:.5f} | Test acc: {test_acc:.2f}%\n")
+          print(f"\nTrain Loss: {train_loss:.5f} | Train Accuracy: {train_acc:.2f}% | Validation Loss: {val_loss:.5f} | Validation Accuracy: {val_acc:.2f}%\n")
           overfit_counter = detect_overfitting(results,epoch,overfit_counter)
 
       best_loss, epochs_no_imp = stagnation(results,epoch,best_loss, epochs_no_imp)
@@ -108,7 +110,7 @@ def batch_train(model:torch.nn.Module,
            main_tag="Loss",
            tag_scalar_dict={
                "train_loss":train_loss,
-               "test_loss":test_loss
+               "val_loss":val_loss
            },
            global_step=epoch
        )
@@ -117,10 +119,29 @@ def batch_train(model:torch.nn.Module,
            main_tag="Accuracy",
            tag_scalar_dict={
                "train_acc":train_acc,
-               "test_acc":test_acc
+               "val_acc":val_acc
            },
            global_step=epoch
        )
+  
+
+
+  model.eval()
+  test_loss, test_correct, test_total = 0,0,0
+  with torch.inference_mode():
+       for x,y in test_data_loader:
+            x,y = x.to(device),y.to(device)
+            test_logits=model(x)
+            test_loss += loss_fn(test_logits, y).item()
+            test_pred = test_logits.argmax(dim=1)
+            test_correct += (test_pred == y).sum().item()
+            test_total += y.size(0)
+
+  test_loss /= len(test_data_loader)
+  test_acc = 100 * (test_correct / test_total)
+  print(f"Test Loss: {test_loss:.5f} | Test Accuracy: {test_acc:.2f}%")
+
+      
       
   if writer is not None: writer.close()
   end = timer()
@@ -134,12 +155,12 @@ def detect_overfitting(results,epoch:int,overfit_counter:int):
 
   """
   This helper function is used for detecting overfitting within the
-  model that is being trained. Should the train and test loss become
+  model that is being trained. Should the train and val loss become
   to different to each other then an overfitting warning is given
 
   Args:
     results: A dictionary contains keys of "train_loss", "train_acc",
-    "test_loss" and "test_acc" each value is a list appended each epoch
+    "val_loss" and "val_acc" each value is a list appended each epoch
     epoch: The amount of times the data is trained for
     overfit_counter: The amount of times the program has detected overfitting.
 
@@ -149,7 +170,7 @@ def detect_overfitting(results,epoch:int,overfit_counter:int):
   """
 
 
-  if results["test_loss"][epoch] - results["train_loss"][epoch] > 0.1:
+  if results["val_loss"][epoch] - results["train_loss"][epoch] > 0.1:
       overfit_counter += 1
   else:
       overfit_counter = 0
@@ -167,7 +188,7 @@ def stagnation(results, epoch:int,best_loss, epochs_no_imp):
 
   Args:
     results: A dictionary contains keys of "train_loss", "train_acc",
-    "test_loss" and "test_acc" each value is a list appended each epoch
+    "val_loss" and "val_acc" each value is a list appended each epoch
     epoch: The amount of times the data is trained for
     best_loss: The lowest loss the model has detected
     epochs_no_imp: The amount of epochs that the model has no improved for
@@ -178,7 +199,7 @@ def stagnation(results, epoch:int,best_loss, epochs_no_imp):
   """
 
 
-  current_loss = results["test_loss"][epoch]
+  current_loss = results["val_loss"][epoch]
   min_delta = 1e-4
   if current_loss < best_loss - min_delta:
       best_loss = current_loss
@@ -195,14 +216,14 @@ def plot_loss_curves(results):
         results (dict): dictionary containing list of values, e.g.
             {"train_loss": [...],
              "train_acc": [...],
-             "test_loss": [...],
-             "test_acc": [...]}
+             "val_loss": [...],
+             "val_acc": [...]}
     """
     loss = results["train_loss"]
-    test_loss = results["test_loss"]
+    val_loss = results["val_loss"]
 
     accuracy = results["train_acc"]
-    test_accuracy = results["test_acc"]
+    val_accuracy = results["val_acc"]
 
     epochs = range(len(results["train_loss"]))
 
@@ -211,7 +232,7 @@ def plot_loss_curves(results):
     # Plot loss
     plt.subplot(1, 2, 1)
     plt.plot(epochs, loss, label="train_loss")
-    plt.plot(epochs, test_loss, label="test_loss")
+    plt.plot(epochs, val_loss, label="val_loss")
     plt.title("Loss")
     plt.xlabel("Epochs")
     plt.legend()
@@ -219,7 +240,7 @@ def plot_loss_curves(results):
     # Plot accuracy
     plt.subplot(1, 2, 2)
     plt.plot(epochs, accuracy, label="train_accuracy")
-    plt.plot(epochs, test_accuracy, label="test_accuracy")
+    plt.plot(epochs, val_accuracy, label="val_accuracy")
     plt.title("Accuracy")
     plt.xlabel("Epochs")
     plt.legend()

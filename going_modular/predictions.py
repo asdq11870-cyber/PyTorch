@@ -1,6 +1,6 @@
-import torchvision
+import torchvision #type: ignore
 from typing import List
-import torch
+import torch #type: ignore
 import matplotlib.pyplot as plt
 
 def pred_and_plot_image(
