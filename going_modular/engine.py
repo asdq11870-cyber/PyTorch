@@ -14,7 +14,7 @@ def batch_train(model:torch.nn.Module,
                 optimiser:torch.optim,
                 loss_fn:torch.nn,
                 writer: torch.utils.tensorboard.SummaryWriter | None,
-                schedular: torch.optim.lr_schedular.LRSchedular | None):
+                schedular: torch.optim.lr_scheduler.LRScheduler | None):
   """
   Function for training batches of data using dataloaders
 
