@@ -174,7 +174,8 @@ def detect_overfitting(results,epoch:int,overfit_counter:int):
   """
 
 
-  if results["val_loss"][epoch] - results["train_loss"][epoch] > 0.1:
+  if(results["val_loss"][epoch] > results["val_loss"][epoch-1]
+     and results["train_loss"][epoch] < results["train_loss"][epoch-1]):
       overfit_counter += 1
   else:
       overfit_counter = 0
