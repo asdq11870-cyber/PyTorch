@@ -13,7 +13,8 @@ def batch_train(model:torch.nn.Module,
                 loss_curves:bool,
                 optimiser:torch.optim,
                 loss_fn:torch.nn,
-                writer: torch.utils.tensorboard.SummaryWriter | None):
+                writer: torch.utils.tensorboard.SummaryWriter | None,
+                schedular: torch.optim.lr_schedular.LRSchedular | None):
   """
   Function for training batches of data using dataloaders
 
@@ -37,7 +38,7 @@ def batch_train(model:torch.nn.Module,
     Nothing
   """
   start = timer()
-  patience = 10
+  patience = 20 # Increasing from 10 to 20 as the schedular will decrease the lr overtime
   overfit_counter = 0
   epochs_no_imp = 0
   best_loss = float("inf")
@@ -105,6 +106,9 @@ def batch_train(model:torch.nn.Module,
           print("Loss is stagnant. Prematurely ending training!")
           break
       
+      if schedular is not None:
+          schedular.step()
+
       if writer is not None:
        writer.add_scalars(
            main_tag="Loss",
