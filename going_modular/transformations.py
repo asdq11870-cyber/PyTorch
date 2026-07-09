@@ -17,6 +17,9 @@ def create_data_transforms(
       size: A tuple of what the width and height of our images are
       augmentation: Whether our images should be augmented
       aug_scale: The scale of our augmentation
+      normalise: boolean for whether our images are normalised
+      mean: Used in normalisation
+      std: Used in normalisation
 
     Returns:
       transforms.Compose(transform_list): The transformation we desire

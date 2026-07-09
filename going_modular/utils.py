@@ -19,7 +19,7 @@ def saving_model(model:torch.nn.Module, model_name:str, target_dir:str):
     model to
 
   Returns:
-    model_save_path: The filepath of where the model is saved
+    None
   """
   model_path = Path(target_dir)
   model_path.mkdir(parents=True, exist_ok=True)
@@ -27,7 +27,6 @@ def saving_model(model:torch.nn.Module, model_name:str, target_dir:str):
   model_save_path = model_path / model_name
   print(f"Saving model to {model_save_path}")
   torch.save(obj=model.state_dict(),f=model_save_path)
-  return model_save_path
 
 def loading_model(model_class,model_save_path, device,*args,**kwargs):
 

@@ -2,6 +2,8 @@ import torch # pyright: ignore[reportMissingImports]
 import matplotlib.pyplot as plt
 from timeit import default_timer as timer
 from torch.utils.tensorboard import SummaryWriter # pyright: ignore[reportMissingImports]
+from going_modular.utils import saving_model
+import copy
 
 def batch_train(model:torch.nn.Module,
                 train_data_loader:torch.utils.data.DataLoader,
@@ -14,7 +16,9 @@ def batch_train(model:torch.nn.Module,
                 optimiser:torch.optim,
                 loss_fn:torch.nn,
                 writer: torch.utils.tensorboard.SummaryWriter | None,
-                schedular: torch.optim.lr_scheduler.LRScheduler | None):
+                scheduler: torch.optim.lr_scheduler.LRScheduler | None,
+                model_name:str,
+                target_dir:str):
   """
   Function for training batches of data using dataloaders
 
@@ -33,6 +37,8 @@ def batch_train(model:torch.nn.Module,
     loss_fn: Used for backpropagation and calculating loss
     writer: This tensorboard summary writer is for writing files and uploading
     them to tensorboard
+    model_name: This name is used in the filepath for saving our model
+    target_dir: The directory where our model is saved to
 
   Returns:
     Nothing
@@ -101,13 +107,17 @@ def batch_train(model:torch.nn.Module,
           print(f"\nTrain Loss: {train_loss:.5f} | Train Accuracy: {train_acc:.2f}% | Validation Loss: {val_loss:.5f} | Validation Accuracy: {val_acc:.2f}%\n")
           overfit_counter = detect_overfitting(results,epoch,overfit_counter)
 
+      if val_loss < best_loss:
+          best_loss = val_loss
+          best_model_weights = copy.deepcopy(model.state_dict())
+
       best_loss, epochs_no_imp = stagnation(results,epoch,best_loss, epochs_no_imp)
       if(epochs_no_imp >= patience):
           print("Loss is stagnant. Prematurely ending training!")
           break
       
-      if schedular is not None:
-          schedular.step()
+      if scheduler is not None:
+          scheduler.step()
 
       if writer is not None:
        writer.add_scalars(
@@ -129,7 +139,7 @@ def batch_train(model:torch.nn.Module,
        )
   
 
-
+  model.load_state_dict(best_model_weights)
   model.eval()
   test_loss, test_correct, test_total = 0,0,0
   with torch.inference_mode():
@@ -143,14 +153,17 @@ def batch_train(model:torch.nn.Module,
 
   test_loss /= len(test_data_loader)
   test_acc = 100 * (test_correct / test_total)
-  print(f"Test Loss: {test_loss:.5f} | Test Accuracy: {test_acc:.2f}%")
-
-      
+  print(f"Test Loss: {test_loss:.5f} | Test Accuracy: {test_acc:.2f}%")   
       
   if writer is not None: writer.close()
   end = timer()
   print(f"Total Training Time: {end-start:.2f} seconds")
 
+  saving_model(
+      model=model,
+      model_name=model_name,
+      target_dir=target_dir
+  )
   if loss_curves:
       plot_loss_curves(results)
 

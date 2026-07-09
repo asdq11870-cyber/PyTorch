@@ -5,10 +5,14 @@ class TinyVGG(nn.Module):
   """
   Creates a TinyVGG architecture
   Replicates the architecture of the CNN Explainer website
+
   Args:
     input: The shape of the input size
     hidden: The amount of hidden units there are
     output: The shape of the output size
+
+  Returns:
+    A tensor that has gone through the convulution layers and the classifier layer
   """
   def __init__(self,input:int, hidden:int, output:int):
     super().__init__()
