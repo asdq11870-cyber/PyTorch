@@ -38,10 +38,32 @@ class TinyVGG(nn.Module):
 
 
 class PatchEmbedding(nn.Module):
-  def __init__(self, patch_size, # 16 to represent 16x16
-                in_channels, # The number of colour channels RGB means 3
-                  embed_dim # The number of features within each patch plus all colours 16*16*3=768
+  """
+  This class if for splitting an image into batches
+  This is done using the conv2d module to split our image and create a tensor
+  then the last two dimensions are combined into one and flattened and then the 
+  tensor is transposed to swap the dimensions 1 and 2
+
+  Args:
+    patch_size: The pixel dimensions of each patch
+    in_channels: The number of colour channels like red, green, blue
+    embed_dim: The number of features or pixels that include the colour channels
+
+  Returns:
+    A tensor of (batch, tokens, features)
+
+  Examples:
+    input tensor: (1, 3, 224, 224) (batch, channels, height, width)
+    patched tensor: (1, 768, 14, 14) (batch, emb_dim, patch_rows, patch_cols)
+    flattened tensor: (1, 768, 196) (batch, emb_dim, tokens)
+    transposed tensor: (1, 196, 768) (batch, tokens, emb_dim)
+
+  """
+  def __init__(self, patch_size,
+                in_channels,
+                  embed_dim
                   ):
+    
     super().__init__()
     self.create_patches = nn.Conv2d(
       in_channels=in_channels,
@@ -51,12 +73,13 @@ class PatchEmbedding(nn.Module):
     )
   
   def forward(self, x):
-    x = self.create_patches(x) # Creates a tensor of size (1, 768, 14, 14)
-    x = x.flatten(start_dim=2) # Flattens the tensor from dim2 and above (1, 768, 196)
-    x = x.transpose(1,2) # Transformer wants (batch, num_patches or tokens, features) so swaps dim1 and dim2
-    return x # Returns the tensor
+    x = self.create_patches(x)
+    x = x.flatten(start_dim=2)
+    x = x.transpose(1,2)
+    return x
 
 class MultiHeadSelfAttention(nn.Module):
+
   def __init__(self, embed_dim, heads, attn_dropout):
     super().__init__()
     self.heads = heads
@@ -79,7 +102,6 @@ class MultiHeadSelfAttention(nn.Module):
     query, key, value = query_key_value.chunk(3, dim=-1) # Splits the vector into 3 vectors with 768 features
     # (batch, tokens, features)
     
-
     query = query.reshape(batch, tokens, self.heads, self.head_dim)
     key = key.reshape(batch, tokens, self.heads, self.head_dim)
     value = value.reshape(batch, tokens, self.heads, self.head_dim) # The information is currently (batch, tokens, heads, features per head)
