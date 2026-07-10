@@ -41,108 +41,158 @@ class TinyVGG(nn.Module):
     return self.classifier(self.conv_layer_2(self.conv_layer_1(x)))
 
 
+
+
 class PatchEmbedding(nn.Module):
   """
-  This class if for splitting an image into batches
-  This is done using the conv2d module to split our image and create a tensor
-  then the last two dimensions are combined into one and flattened and then the 
-  tensor is transposed to swap the dimensions 1 and 2
+  Splits an image into non-overlapping patches and projects each patch into
+  an embedding vector using a Conv2D layer.
+
+  The resulting patch embeddings are flattened and transposed into the
+  format expected by a Vision Transformer.
 
   Args:
-    patch_size: The pixel dimensions of each patch
-    in_channels: The number of colour channels like red, green, blue
-    embed_dim: The number of features or pixels that include the colour channels
+      patch_size: Height and width of each square image patch.
+      in_channels: Number of input image channels (e.g. 3 for RGB).
+      embed_dim: Dimension of the embedding vector produced for each patch.
 
   Returns:
-    A tensor of (batch, tokens, features)
+      Tensor of shape (batch_size, num_patches, embed_dim).
 
-  Examples:
-    input tensor: (1, 3, 224, 224) (batch, channels, height, width)
-    patched tensor: (1, 768, 14, 14) (batch, emb_dim, patch_rows, patch_cols)
-    flattened tensor: (1, 768, 196) (batch, emb_dim, tokens)
-    transposed tensor: (1, 196, 768) (batch, tokens, emb_dim)
-
+  Example:
+      Input:             (1, 3, 224, 224)
+      After Conv2D:      (1, 768, 14, 14)
+      After flatten():   (1, 768, 196)
+      After transpose(): (1, 196, 768)
   """
-  def __init__(self, patch_size,
-                in_channels,
-                  embed_dim
-                  ):
-    
-    super().__init__()
-    self.create_patches = nn.Conv2d(
-      in_channels=in_channels,
-      out_channels=embed_dim,
-      kernel_size=(patch_size,patch_size),
-      stride=patch_size
-    )
-  
+  def __init__(self, patch_size, in_channels, embed_dim):
+      super().__init__()
+      self.create_patches = nn.Conv2d(
+          in_channels=in_channels,
+          out_channels=embed_dim,
+          kernel_size=(patch_size, patch_size),
+          stride=patch_size
+      )
+
   def forward(self, x):
-    x = self.create_patches(x)
-    x = x.flatten(start_dim=2)
-    x = x.transpose(1,2)
-    return x
+      x = self.create_patches(x)
+      x = x.flatten(start_dim=2)
+      x = x.transpose(1, 2)
+      return x
+
 
 class MultiHeadSelfAttention(nn.Module):
+  """
+  Applies multi-head self-attention to the input tokens.
 
+  Each token is projected into Query, Key and Value vectors. Attention
+  scores are calculated between every pair of tokens, allowing information
+  to be exchanged across the entire image. The outputs from all attention
+  heads are concatenated and projected back to the original embedding
+  dimension.
+
+  Args:
+      embed_dim: Dimension of each token embedding.
+      heads: Number of parallel attention heads.
+      attn_dropout: Dropout probability applied to the attention weights.
+
+  Returns:
+      Tensor of shape (batch_size, num_tokens, embed_dim).
+
+  Example:
+      Input:                    (1, 197, 768)
+      Query, Key, Value:        (1, 197, 768)
+      Split into heads:         (1, 12, 197, 64)
+      Attention scores:         (1, 12, 197, 197)
+      Attention output:         (1, 12, 197, 64)
+      Concatenated output:      (1, 197, 768)
+      Final output:             (1, 197, 768)
+  """
   def __init__(self, embed_dim, heads, attn_dropout):
-    super().__init__()
-    self.heads = heads
-    self.embed_dim = embed_dim
-    self.query_key_value = nn.Linear(
-      in_features=embed_dim,
-      out_features=embed_dim*3
-    )
-    self.projection = nn.Linear(
-      in_features=embed_dim,
-      out_features=embed_dim
-    )
-    assert embed_dim % heads == 0
-    self.head_dim = embed_dim // self.heads # Calculates the number of features per head
-    self.attention_dropout = nn.Dropout(p=attn_dropout)
+      super().__init__()
+      self.heads = heads
+      self.embed_dim = embed_dim
+      self.query_key_value = nn.Linear(embed_dim, embed_dim * 3)
+      self.projection = nn.Linear(embed_dim, embed_dim)
+      assert embed_dim % heads == 0
+      self.head_dim = embed_dim // heads
+      self.attention_dropout = nn.Dropout(attn_dropout)
 
   def forward(self, x):
-    batch, tokens, _ = x.shape # Aquired these values when this class is called 
-    query_key_value = self.query_key_value(x) # Creating a vector 3 times the size
-    query, key, value = query_key_value.chunk(3, dim=-1) # Splits the vector into 3 vectors with 768 features
-    # (batch, tokens, features)
-    
-    query = query.reshape(batch, tokens, self.heads, self.head_dim)
-    key = key.reshape(batch, tokens, self.heads, self.head_dim)
-    value = value.reshape(batch, tokens, self.heads, self.head_dim) # The information is currently (batch, tokens, heads, features per head)
+      batch, tokens, _ = x.shape
+      qkv = self.query_key_value(x)
+      query, key, value = qkv.chunk(3, dim=-1)
 
-    query = query.transpose(1,2)
-    key = key.transpose(1,2)
-    value = value.transpose(1,2) # The information now is (batch, heads, tokens, features per head)
+      query = query.reshape(batch, tokens, self.heads, self.head_dim).transpose(1, 2)
+      key = key.reshape(batch, tokens, self.heads, self.head_dim).transpose(1, 2)
+      value = value.reshape(batch, tokens, self.heads, self.head_dim).transpose(1, 2)
 
-    scores = torch.matmul(query, key.transpose(-2,-1))
-    scores = scores / (self.head_dim ** 0.5)
-    attention = torch.softmax(scores, dim=-1)
-    attention = self.attention_dropout(attention)
-    out = torch.matmul(attention, value)
+      scores = torch.matmul(query, key.transpose(-2, -1))
+      scores = scores / (self.head_dim ** 0.5)
+      attention = self.attention_dropout(torch.softmax(scores, dim=-1))
+      out = torch.matmul(attention, value)
 
-    out = out.transpose(1,2)
-    out = out.reshape(batch, tokens, self.embed_dim)
-    out = self.projection(out)
+      out = out.transpose(1, 2).reshape(batch, tokens, self.embed_dim)
+      return self.projection(out)
 
-    return out
 
 class FeedForward(nn.Module):
-  def __init__(self, embed_dim, mlp_dim, mlp_dropout):
-    super().__init__()
+  """
+  Implements the feed-forward network used within a Transformer encoder.
 
-    self.gelu_activation = nn.GELU() # add non linearity
-    self.layer = nn.Sequential(
-      nn.Linear(in_features=embed_dim, out_features=mlp_dim), # increases size of tokens 768 -> 3072 to create more complex feature relationships
-      self.gelu_activation,
-      nn.Dropout(p=mlp_dropout),
-      nn.Linear(in_features=mlp_dim, out_features=embed_dim), # Compressing the size back to prepare for another encoding
-      nn.Dropout(p=mlp_dropout)
-    )
+  Args:
+      embed_dim: Dimension of each token embedding.
+      mlp_dim: Hidden dimension of the feed-forward network.
+      mlp_dropout: Dropout probability applied after each linear layer.
+
+  Returns:
+      Tensor of shape (batch_size, num_tokens, embed_dim).
+
+  Example:
+      Input:                    (1, 197, 768)
+      First Linear Layer:       (1, 197, 3072)
+      GELU + Dropout:           (1, 197, 3072)
+      Second Linear Layer:      (1, 197, 768)
+      Output:                   (1, 197, 768)
+  """
+  def __init__(self, embed_dim, mlp_dim, mlp_dropout):
+      super().__init__()
+      self.layer = nn.Sequential(
+          nn.Linear(embed_dim, mlp_dim),
+          nn.GELU(),
+          nn.Dropout(mlp_dropout),
+          nn.Linear(mlp_dim, embed_dim),
+          nn.Dropout(mlp_dropout),
+      )
 
   def forward(self, x):
-    return self.layer(x)
+      return self.layer(x)
+
 
 class TransformEncoderBlock(nn.Module):
+  """
+  Implements a single Vision Transformer encoder block.
+
+  Args:
+      embed_dim: Dimension of each token embedding.
+      heads: Number of attention heads.
+      mlp_dim: Hidden dimension of the feed-forward network.
+      mlp_dropout: Dropout probability within the feed-forward network.
+      attn_dropout: Dropout probability applied to the attention weights.
+
+  Returns:
+      Tensor of shape (batch_size, num_tokens, embed_dim).
+
+  Example:
+      Input:                    (1, 197, 768)
+      LayerNorm:                (1, 197, 768)
+      Self-Attention:           (1, 197, 768)
+      First Residual Add:       (1, 197, 768)
+      LayerNorm:                (1, 197, 768)
+      Feed Forward Network:     (1, 197, 768)
+      Second Residual Add:      (1, 197, 768)
+      Output:                   (1, 197, 768)
+  """
   def __init__(self, embed_dim, heads, mlp_dim, mlp_dropout, attn_dropout):
     super().__init__()
 
