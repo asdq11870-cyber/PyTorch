@@ -1,7 +1,7 @@
 import torch #type: ignore
 from torch.utils.data import Dataset #type: ignore
 from PIL import Image
-from utils import find_classes
+from going_modular.utils import find_classes
 from pathlib import Path
 from typing import Tuple, Dict, List
 
