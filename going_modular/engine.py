@@ -23,10 +23,10 @@ def batch_train(model:torch.nn.Module,
   Function for training batches of data using dataloaders
 
   Each batch is iterative given to the function to be experimented
-  on and then valed on.
+  on and then tested on.
 
   Args:
-    model: The model being valed
+    model: The model being tested
     train_data_loader: The dataloader that contains the training data
     val_data_loader: The dataloader that contains the validating data
     test_data_loader: The dataloader that contains the testing data
@@ -186,9 +186,10 @@ def detect_overfitting(results,epoch:int,overfit_counter:int):
     is overfitting
   """
 
+  min_delta = 0.01
 
-  if(results["val_loss"][epoch] > results["val_loss"][epoch-1]
-     and results["train_loss"][epoch] < results["train_loss"][epoch-1]):
+  if(results["val_loss"][epoch] > results["val_loss"][epoch-1] + min_delta
+     and results["train_loss"][epoch] < results["train_loss"][epoch-1] - min_delta):
       overfit_counter += 1
   else:
       overfit_counter = 0
