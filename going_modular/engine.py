@@ -271,7 +271,7 @@ def plot_loss_curves(results):
 def training_finished():
   """
   Signals when training has concluded by implementing a beeping sound
-  
+
   This function is designed for long training runs where the user may not
   be actively monitoring the process. It attempts to play a custom audio
   file (`done.wav`) when running in notebook environments such as Google
@@ -284,7 +284,7 @@ def training_finished():
   Returns:
     None
   """
-  sound_path = Path(__file__).parent.parent / "assets" / "audio" / "done.wav"
+  sound_path = Path("assets/audio/done.wav")
   if sound_path.exists():
     try:
       from IPython.display import Audio, display
