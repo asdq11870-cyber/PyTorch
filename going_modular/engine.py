@@ -57,11 +57,11 @@ def batch_train(model:torch.nn.Module,
       "val_acc": []
   }
 
-  if writer is not None:
-   writer.add_graph(
-     model=model,
-     input_to_model=torch.randn(32,3,224,224).to(device)
-   )
+  # if writer is not None:
+  #  writer.add_graph(
+  #    model=model,
+  #    input_to_model=torch.randn(32,3,224,224).to(device)
+  #  )
 
   for epoch in range(epochs):
       print(f"Epoch: {epoch+1} \n ---------------------------------------------------------")
