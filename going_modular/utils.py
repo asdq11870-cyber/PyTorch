@@ -7,6 +7,9 @@ import requests
 import torch # pyright: ignore[reportMissingImports]
 import random
 from typing import Tuple, List, Dict
+import torchvision #pyright: ignore[reportMissingImports]
+from timeit import default_timer as timer
+from PIL import Image
 
 
 def saving_model(model:torch.nn.Module, model_name:str, target_dir:str):
@@ -226,3 +229,40 @@ def model_size_and_params(model, model_savepath):
     model_size = Path(model_savepath).stat().st_size // (1024**2)
     total_params = sum(torch.numel(param) for param in model.parameters())
     return {"MODEL_SIZE":model_size,"TOTAL_PARAMETERS":total_params}
+
+def pred_and_store(test_dir, model:torch.nn.Module, transform:torchvision.transforms.Compose, class_names: List[str],
+                   device:torch.device) -> List[Dict]:
+    
+    test_paths = list(Path(test_dir).glob("*/*.jpg"))
+    pred_list = []
+
+    model.to(device)
+    model.eval()
+
+    for path in test_paths:
+        pred_dict = {}
+        pred_dict["image_path"] = path
+        class_name = path.parent.stem
+        pred_dict["class_name"] = class_name
+
+        start = timer()
+        image = Image.open(path).convert("RGB")
+        t_image = transform(image).unsqueeze(dim=0).to(device)
+        
+        with torch.inference_mode():
+            pred_logit = model(t_image)
+            pred_prob = torch.softmax(pred_logit, dim=1)
+            pred_label = torch.argmax(pred_prob, dim=1)
+            pred_class = class_names[pred_label.cpu()]
+            pred_dict["pred_prob"] = round(pred_prob.max().cpu().item(), 4)
+            pred_dict["pred_class"] = pred_class
+
+            end = timer()
+            pred_dict["time_for_pred"] = round(end-start, 4)
+
+        pred_dict["correct"] = class_name == pred_class
+
+        pred_list.append(pred_dict)
+
+    return pred_list
+
