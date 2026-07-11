@@ -221,3 +221,8 @@ def plot_transformed_images(image_paths, transform, n=3, seed=42):
             ax[1].axis("off")
 
             fig.suptitle(f"Class: {image_path.parent.stem}", fontsize=16)
+
+def model_size_and_params(model, model_savepath):
+    model_size = Path(model_savepath).stat().st_size // (1024**2)
+    total_params = sum(torch.numel(param) for param in model.parameters())
+    return {"MODEL_SIZE":model_size,"TOTAL_PARAMETERS":total_params}
