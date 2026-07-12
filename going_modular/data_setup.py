@@ -4,6 +4,7 @@ from torchvision import transforms, datasets # type: ignore
 import os
 NUM_WORKERS = os.cpu_count()
 
+
 def create_dataloaders(
     train_dir: str,
     test_dir: str,
@@ -51,12 +52,14 @@ def create_dataloaders(
 
   )
 
+  PIN_MEMORY = torch.cuda.is_available()
+
   train_dataloader = DataLoader(
       dataset=train_dataset,
       batch_size=batch_size,
       num_workers=num_workers,
       shuffle=True,
-      pin_memory=True
+      pin_memory=PIN_MEMORY
   )
 
   val_dataloader = DataLoader(
@@ -64,7 +67,7 @@ def create_dataloaders(
       batch_size=batch_size,
       num_workers=num_workers,
       shuffle=False,
-      pin_memory=True
+      pin_memory=PIN_MEMORY
   )
 
   test_dataloader = DataLoader(
@@ -72,7 +75,7 @@ def create_dataloaders(
       batch_size=batch_size,
       num_workers=num_workers,
       shuffle=False,
-      pin_memory=True
+      pin_memory=PIN_MEMORY
   )
 
   class_names = train_dataset.classes
