@@ -48,7 +48,9 @@ def batch_train(model:torch.nn.Module,
   patience = 20 # Increasing from 10 to 20 as the schedular will decrease the lr overtime
   overfit_counter = 0
   epochs_no_imp = 0
-  best_loss = float("inf")
+  best_model_loss = float("inf")
+  best_stagnation_loss = float("inf")
+  best_model_weights = copy.deepcopy(model.state_dict())
 
   results = {
       "train_loss": [],
@@ -108,11 +110,11 @@ def batch_train(model:torch.nn.Module,
           print(f"\nTrain Loss: {train_loss:.5f} | Train Accuracy: {train_acc:.2f}% | Validation Loss: {val_loss:.5f} | Validation Accuracy: {val_acc:.2f}%\n")
           overfit_counter = detect_overfitting(results,epoch,overfit_counter)
 
-      if val_loss < best_loss:
-          best_loss = val_loss
+      if val_loss < best_model_loss:
+          best_model_loss = val_loss
           best_model_weights = copy.deepcopy(model.state_dict())
 
-      best_loss, epochs_no_imp = stagnation(results,epoch,best_loss, epochs_no_imp)
+      best_stagnation_loss, epochs_no_imp = stagnation(val_loss,epoch,best_stagnation_loss, epochs_no_imp)
       if(epochs_no_imp >= patience):
           print("Loss is stagnant. Prematurely ending training!")
           break
@@ -203,15 +205,14 @@ def detect_overfitting(results,epoch:int,overfit_counter:int):
   return overfit_counter
 
 
-def stagnation(results, epoch:int,best_loss, epochs_no_imp):
+def stagnation(current_loss, epoch:int,best_loss, epochs_no_imp):
 
   """
   A helper function that detects if the model's training has become
   stagnant
 
   Args:
-    results: A dictionary contains keys of "train_loss", "train_acc",
-    "val_loss" and "val_acc" each value is a list appended each epoch
+    current_loss: The validation loss
     epoch: The amount of times the data is trained for
     best_loss: The lowest loss the model has detected
     epochs_no_imp: The amount of epochs that the model has no improved for
@@ -221,8 +222,6 @@ def stagnation(results, epoch:int,best_loss, epochs_no_imp):
     epochs_no_imp: The new best epochs_no_imp
   """
 
-
-  current_loss = results["val_loss"][epoch]
   min_delta = 1e-4
   if current_loss < best_loss - min_delta:
       best_loss = current_loss
