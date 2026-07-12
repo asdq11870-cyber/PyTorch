@@ -62,207 +62,224 @@ def loading_model(model_class,model_save_path, device,*args,**kwargs):
   return loaded_model
 
 def set_seeds(seed: int=42):
-    """Sets random sets for torch operations.
+  """Sets random sets for torch operations.
 
-    Args:
-        seed (int, optional): Random seed to set. Defaults to 42.
-    """
-    # Set the seed for general torch operations
-    torch.manual_seed(seed)
-    # Set the seed for CUDA torch operations (ones that happen on the GPU)
-    torch.cuda.manual_seed(seed)
+  Args:
+      seed (int, optional): Random seed to set. Defaults to 42.
+  """
+  # Set the seed for general torch operations
+  torch.manual_seed(seed)
+  # Set the seed for CUDA torch operations (ones that happen on the GPU)
+  torch.cuda.manual_seed(seed)
 
 def download_data(source: str, 
                   destination: str,
                   remove_source: bool = True) -> Path:
-    """Downloads a zipped dataset from source and unzips to destination.
+  """Downloads a zipped dataset from source and unzips to destination.
 
-    Args:
-        source (str): A link to a zipped file containing data.
-        destination (str): A target directory to unzip data to.
-        remove_source (bool): Whether to remove the source after downloading and extracting.
+  Args:
+      source (str): A link to a zipped file containing data.
+      destination (str): A target directory to unzip data to.
+      remove_source (bool): Whether to remove the source after downloading and extracting.
+  
+  Returns:
+      pathlib.Path to downloaded data.
+  
+  Example usage:
+      download_data(source="https://github.com/mrdbourke/pytorch-deep-learning/raw/main/data/pizza_steak_sushi.zip",
+                    destination="pizza_steak_sushi")
+  """
+  # Setup path to data folder
+  data_path = Path("data/")
+  data_path.mkdir(parents=True, exist_ok=True)
+
+  zip_file = data_path / "watch_shoe_fragrance.zip"
+  extract_path = data_path / destination
+
+  # download only if needed
+  if not extract_path.exists():
+    print("Downloading data zip")
+    request = requests.get(source)
+
+    with open(zip_file, "wb") as f:
+        f.write(request.content)
+
+    print("Unzipping")
+    with zipfile.ZipFile(zip_file, "r") as zip_ref:
+        zip_ref.extractall(data_path)
+
+    if remove_source:
+      os.remove(zip_file)
     
-    Returns:
-        pathlib.Path to downloaded data.
-    
-    Example usage:
-        download_data(source="https://github.com/mrdbourke/pytorch-deep-learning/raw/main/data/pizza_steak_sushi.zip",
-                      destination="pizza_steak_sushi")
-    """
-    # Setup path to data folder
-    data_path = Path("data/")
-    data_path.mkdir(parents=True, exist_ok=True)
-
-    zip_file = data_path / "watch_shoe_fragrance.zip"
-    extract_path = data_path / destination
-
-    # download only if needed
-    if not extract_path.exists():
-        print("Downloading data zip")
-        request = requests.get(source)
-
-        with open(zip_file, "wb") as f:
-            f.write(request.content)
-
-        print("Unzipping")
-        with zipfile.ZipFile(zip_file, "r") as zip_ref:
-            zip_ref.extractall(data_path)
-
-        if remove_source:
-          os.remove(zip_file)
-        
-        return extract_path
+    return extract_path
     
 from torch.utils.tensorboard import SummaryWriter #type: ignore
 
 def create_writer(experiment_name: str, 
                   model_name: str, 
                   extra: str=None):
-    """Creates a torch.utils.tensorboard.writer.SummaryWriter() instance saving to a specific log_dir.
+  """Creates a torch.utils.tensorboard.writer.SummaryWriter() instance saving to a specific log_dir.
 
-    log_dir is a combination of runs/timestamp/experiment_name/model_name/extra.
+  log_dir is a combination of runs/timestamp/experiment_name/model_name/extra.
 
-    Where timestamp is the current date in YYYY-MM-DD format.
+  Where timestamp is the current date in YYYY-MM-DD format.
 
-    Args:
-        experiment_name (str): Name of experiment.
-        model_name (str): Name of model.
-        extra (str, optional): Anything extra to add to the directory. Defaults to None.
+  Args:
+      experiment_name (str): Name of experiment.
+      model_name (str): Name of model.
+      extra (str, optional): Anything extra to add to the directory. Defaults to None.
 
-    Returns:
-        torch.utils.tensorboard.writer.SummaryWriter(): Instance of a writer saving to log_dir.
+  Returns:
+      torch.utils.tensorboard.writer.SummaryWriter(): Instance of a writer saving to log_dir.
 
-    Example usage:
-        # Create a writer saving to "runs/2022-06-04/data_10_percent/effnetb2/5_epochs/"
-        writer = create_writer(experiment_name="data_10_percent",
-                               model_name="effnetb2",
-                               extra="5_epochs")
-        # The above is the same as:
-        writer = SummaryWriter(log_dir="runs/2022-06-04/data_10_percent/effnetb2/5_epochs/")
-    """
-    from datetime import datetime
-    import os
+  Example usage:
+      # Create a writer saving to "runs/2022-06-04/data_10_percent/effnetb2/5_epochs/"
+      writer = create_writer(experiment_name="data_10_percent",
+                              model_name="effnetb2",
+                              extra="5_epochs")
+      # The above is the same as:
+      writer = SummaryWriter(log_dir="runs/2022-06-04/data_10_percent/effnetb2/5_epochs/")
+  """
+  from datetime import datetime
+  import os
 
-    # Get timestamp of current date (all experiments on certain day live in same folder)
-    timestamp = datetime.now().strftime("%d-%m-%Y") 
+  # Get timestamp of current date (all experiments on certain day live in same folder)
+  timestamp = datetime.now().strftime("%d-%m-%Y") 
 
 
-    log_dir = os.path.join("runs", timestamp, experiment_name, model_name)
-    if extra: log_dir = os.path.join(log_dir, extra)
-        
-    print(f"[INFO] Created SummaryWriter, saving to: {log_dir}...")
-    return SummaryWriter(log_dir=log_dir)
+  log_dir = os.path.join("runs", timestamp, experiment_name, model_name)
+  if extra: log_dir = os.path.join(log_dir, extra)
+      
+  print(f"[INFO] Created SummaryWriter, saving to: {log_dir}...")
+  return SummaryWriter(log_dir=log_dir)
 
 def walk_through_dir(dir_path):
-    """
-    Walks through dir_path returning its contents.
-    Args:
-    dir_path (str): target directory
+  """
+  Walks through dir_path returning its contents.
+  Args:
+  dir_path (str): target directory
 
-    Returns:
-    A print out of:
-      number of subdiretories in dir_path
-      number of images (files) in each subdirectory
-      name of each subdirectory
-    """
-    for dirpath, dirnames, filenames in os.walk(dir_path):
-        print(f"There are {len(dirnames)} directories and {len(filenames)} images in '{dirpath}'.")
+  Returns:
+  A print out of:
+    number of subdiretories in dir_path
+    number of images (files) in each subdirectory
+    name of each subdirectory
+  """
+  for dirpath, dirnames, filenames in os.walk(dir_path):
+      print(f"There are {len(dirnames)} directories and {len(filenames)} images in '{dirpath}'.")
 
 def find_classes(directory: str) -> Tuple[List[str], Dict[str, int]]:
-    """Finds the class folder names in a target directory.
-    
-    Assumes target directory is in standard image classification format.
+  """Finds the class folder names in a target directory.
+  
+  Assumes target directory is in standard image classification format.
 
-    Args:
-        directory (str): target directory to load classnames from.
+  Args:
+      directory (str): target directory to load classnames from.
 
-    Returns:
-        Tuple[List[str], Dict[str, int]]: (list_of_class_names, dict(class_name: idx...))
-    
-    Example:
-        find_classes("food_images/train")
-        >>> (["class_1", "class_2"], {"class_1": 0, ...})
-    """
-    # 1. Get the class names by scanning the target directory
-    classes = sorted(entry.name for entry in os.scandir(directory) if entry.is_dir())
-    
-    # 2. Raise an error if class names not found
-    if not classes:
-        raise FileNotFoundError(f"Couldn't find any classes in {directory}.")
-        
-    # 3. Create a dictionary of index labels (computers prefer numerical rather than string labels)
-    class_to_idx = {cls_name: i for i, cls_name in enumerate(classes)}
-    return classes, class_to_idx
+  Returns:
+      Tuple[List[str], Dict[str, int]]: (list_of_class_names, dict(class_name: idx...))
+  
+  Example:
+      find_classes("food_images/train")
+      >>> (["class_1", "class_2"], {"class_1": 0, ...})
+  """
+  # 1. Get the class names by scanning the target directory
+  classes = sorted(entry.name for entry in os.scandir(directory) if entry.is_dir())
+  
+  # 2. Raise an error if class names not found
+  if not classes:
+      raise FileNotFoundError(f"Couldn't find any classes in {directory}.")
+      
+  # 3. Create a dictionary of index labels (computers prefer numerical rather than string labels)
+  class_to_idx = {cls_name: i for i, cls_name in enumerate(classes)}
+  return classes, class_to_idx
 
 def plot_transformed_images(image_paths, transform, n=3, seed=42):
-    """Plots a series of random images from image_paths.
+  """Plots a series of random images from image_paths.
 
-    Will open n image paths from image_paths, transform them
-    with transform and plot them side by side.
+  Will open n image paths from image_paths, transform them
+  with transform and plot them side by side.
 
-    Args:
-        image_paths (list): List of target image paths. 
-        transform (PyTorch Transforms): Transforms to apply to images.
-        n (int, optional): Number of images to plot. Defaults to 3.
-        seed (int, optional): Random seed for the random generator. Defaults to 42.
-    """
-    random.seed(seed)
-    random_image_paths = random.sample(image_paths, k=n)
-    for image_path in random_image_paths:
-        with Image.open(image_path) as f:
-            fig, ax = plt.subplots(1, 2)
-            ax[0].imshow(f) 
-            ax[0].set_title(f"Original \nSize: {f.size}")
-            ax[0].axis("off")
+  Args:
+      image_paths (list): List of target image paths. 
+      transform (PyTorch Transforms): Transforms to apply to images.
+      n (int, optional): Number of images to plot. Defaults to 3.
+      seed (int, optional): Random seed for the random generator. Defaults to 42.
+  """
+  random.seed(seed)
+  random_image_paths = random.sample(image_paths, k=n)
+  for image_path in random_image_paths:
+    with Image.open(image_path) as f:
+      fig, ax = plt.subplots(1, 2)
+      ax[0].imshow(f) 
+      ax[0].set_title(f"Original \nSize: {f.size}")
+      ax[0].axis("off")
 
-            # Transform and plot image
-            # Note: permute() will change shape of image to suit matplotlib 
-            # (PyTorch default is [C, H, W] but Matplotlib is [H, W, C])
-            transformed_image = transform(f).permute(1, 2, 0) 
-            ax[1].imshow(transformed_image) 
-            ax[1].set_title(f"Transformed \nSize: {transformed_image.shape}")
-            ax[1].axis("off")
+      # Transform and plot image
+      # Note: permute() will change shape of image to suit matplotlib 
+      # (PyTorch default is [C, H, W] but Matplotlib is [H, W, C])
+      transformed_image = transform(f).permute(1, 2, 0) 
+      ax[1].imshow(transformed_image) 
+      ax[1].set_title(f"Transformed \nSize: {transformed_image.shape}")
+      ax[1].axis("off")
 
-            fig.suptitle(f"Class: {image_path.parent.stem}", fontsize=16)
+      fig.suptitle(f"Class: {image_path.parent.stem}", fontsize=16)
 
-def model_size_and_params(model, model_savepath):
-    model_size = Path(model_savepath).stat().st_size // (1024**2)
-    total_params = sum(torch.numel(param) for param in model.parameters())
-    return {"MODEL_SIZE":model_size,"TOTAL_PARAMETERS":total_params}
+def model_size_and_params(model, model_savepath) -> Dict:
+  model_size = Path(model_savepath).stat().st_size // (1024**2)
+  total_params = sum(torch.numel(param) for param in model.parameters())
+  return {"MODEL_SIZE":model_size,"TOTAL_PARAMETERS":total_params}
 
 def pred_and_store(test_dir, model:torch.nn.Module, transform:torchvision.transforms.Compose, class_names: List[str],
                    device:torch.device) -> List[Dict]:
+
+  """
+  This function tells the user the predicted class and how certain the model
+  was during it's prediction. It returns a dictionary of the image path, class
+  name, predicted probability, predicted class, time taken to make the prediction
+  and whether the model was correct
+
+  Args:
+    test_dir: The test directory containing all the test images
+    model: The model being tested
+    transform: The transform applied to the image
+    class_names: The names of the classes
+    device: The device the model is running on
+
+  Returns:
+    A list of dictionaries
+  """
+  
+  test_paths = list(Path(test_dir).glob("*/*.jpg"))
+  pred_list = []
+
+  model.to(device)
+  model.eval()
+
+  for path in test_paths:
+    pred_dict = {}
+    pred_dict["image_path"] = path
+    class_name = path.parent.stem
+    pred_dict["class_name"] = class_name
+
+    start = timer()
+    image = Image.open(path).convert("RGB")
+    t_image = transform(image).unsqueeze(dim=0).to(device)
     
-    test_paths = list(Path(test_dir).glob("*/*.jpg"))
-    pred_list = []
+    with torch.inference_mode():
+      pred_logit = model(t_image)
+      pred_prob = torch.softmax(pred_logit, dim=1)
+      pred_label = torch.argmax(pred_prob, dim=1)
+      pred_class = class_names[pred_label.cpu()]
+      pred_dict["pred_prob"] = round(pred_prob.max().cpu().item(), 4)
+      pred_dict["pred_class"] = pred_class
 
-    model.to(device)
-    model.eval()
+      end = timer()
+      pred_dict["time_for_pred"] = round(end-start, 4)
 
-    for path in test_paths:
-        pred_dict = {}
-        pred_dict["image_path"] = path
-        class_name = path.parent.stem
-        pred_dict["class_name"] = class_name
+    pred_dict["correct"] = class_name == pred_class
 
-        start = timer()
-        image = Image.open(path).convert("RGB")
-        t_image = transform(image).unsqueeze(dim=0).to(device)
-        
-        with torch.inference_mode():
-            pred_logit = model(t_image)
-            pred_prob = torch.softmax(pred_logit, dim=1)
-            pred_label = torch.argmax(pred_prob, dim=1)
-            pred_class = class_names[pred_label.cpu()]
-            pred_dict["pred_prob"] = round(pred_prob.max().cpu().item(), 4)
-            pred_dict["pred_class"] = pred_class
+    pred_list.append(pred_dict)
 
-            end = timer()
-            pred_dict["time_for_pred"] = round(end-start, 4)
-
-        pred_dict["correct"] = class_name == pred_class
-
-        pred_list.append(pred_dict)
-
-    return pred_list
+  return pred_list
 
