@@ -36,4 +36,5 @@ demo = gr.Interface(
     outputs=[gr.Label(num_top_classes=3, label="Predictions"), gr.Number(label="Prediction Time (s)")],
     title=title, description=description,examples=example_list
 )
-demo.launch(server_name="0.0.0.0", server_port=int(os.environ.get("PORT",7860)))
+if __name__ == "__main__":
+    demo.launch(server_name="0.0.0.0", server_port=int(os.environ.get("PORT",7860)))
