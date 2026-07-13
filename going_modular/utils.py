@@ -55,7 +55,8 @@ def loading_model(model_class,model_save_path, device,*args,**kwargs):
   Returns:
     loadel_model: It returns the model that we loaded
   """
-  loaded_model = model_class(*args,**kwargs)
+  if model_class is not None:
+    loaded_model = model_class(*args,**kwargs)
   loaded_model.load_state_dict(torch.load(f=model_save_path, map_location=device))
   loaded_model.to(device)
   loaded_model.eval()
