@@ -30,7 +30,8 @@ def saving_model(model:torch.nn.Module, model_name:str, target_dir:str):
     None
   """
   model_path = Path(target_dir)
-  model_path.mkdir(parents=True, exist_ok=True)
+  if not model_path.exists():
+    model_path.mkdir(parents=True, exist_ok=True)
   assert model_name.endswith((".pt", ".pth")), "model_name should end with '.pt' or '.pth'"
   model_save_path = model_path / model_name
   print(f"Saving model to {model_save_path}")
