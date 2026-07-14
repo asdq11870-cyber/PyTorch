@@ -4,8 +4,10 @@ import os
 from model import create_effnetb2_model
 from typing import Tuple, Dict
 from timeit import default_timer as timer
+import json
 
-class_names = ["fragrance", "shoe", "watch"]
+with open("class_names.json", "r") as f:
+    class_names = json.load(f)
 
 effnetb2, effnetb2_transform = create_effnetb2_model(num_classes=len(class_names))
 effnetb2.load_state_dict(torch.load(f="effnetb2.pth",map_location=torch.device("cpu")))
