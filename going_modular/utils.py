@@ -12,6 +12,37 @@ from timeit import default_timer as timer
 from PIL import Image
 
 
+
+def display_random_images(dataset: torch.utils.data.Dataset,
+                          classes: List[str],
+                          n: int = 10,
+                          display_shape: bool = True,
+                          seed: int = None):
+  if n > 10:
+    n = 10
+    display_shape = False
+    print("Only 10 images for viewing purposes!")
+
+  if seed:
+    random.seed(seed)
+
+  random_index = random.sample(range(len(dataset)), k=n)
+  plt.figure(figsize=(16,8))
+  for i, random_idx in enumerate(random_index):
+    targ_image, targ_label = dataset[random_idx][0], dataset[random_idx][1]
+    targ_image_adjust = targ_image.permute(1,2,0)
+    plt.subplot(1,n,i+1)
+    plt.imshow(targ_image_adjust)
+    plt.axis(False)
+    title = ""
+    if classes:
+      title = f"class: {classes[targ_label]}"
+      if display_shape:
+        title = title + f" | shape: {targ_image_adjust.shape}"
+    plt.title(title)
+
+
+
 def saving_model(model:torch.nn.Module, model_name:str, target_dir:str):
   """
   This helper functions is for saving an exact replica of the model we are training
