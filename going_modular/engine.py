@@ -66,6 +66,7 @@ def batch_train(model:torch.nn.Module,
   #  )
 
   for epoch in range(epochs):
+      epoch_start = timer()
       print(f"Epoch: {epoch+1} \n ---------------------------------------------------------")
       train_loss, train_correct, train_total = 0.0, 0, 0
       for batch, (x,y) in enumerate(train_data_loader):
@@ -105,10 +106,8 @@ def batch_train(model:torch.nn.Module,
       results["train_acc"].append(train_acc)
       results["val_loss"].append(val_loss)
       results["val_acc"].append(val_acc)
-
-      if epoch % divisor == 0:
-          print(f"\nTrain Loss: {train_loss:.5f} | Train Accuracy: {train_acc:.2f}% | Validation Loss: {val_loss:.5f} | Validation Accuracy: {val_acc:.2f}%\n")
-          overfit_counter = detect_overfitting(results,epoch,overfit_counter)
+      
+      overfit_counter = detect_overfitting(results,epoch,overfit_counter)
 
       if val_loss < best_model_loss:
           best_model_loss = val_loss
@@ -140,6 +139,10 @@ def batch_train(model:torch.nn.Module,
            },
            global_step=epoch
        )
+
+      epoch_time_elapsed = timer() - epoch_start
+      if epoch % divisor == 0:
+          print(f"\nTrain Loss: {train_loss:.5f} | Train Accuracy: {train_acc:.2f}% | Validation Loss: {val_loss:.5f} | Validation Accuracy: {val_acc:.2f}% | Time of Epoch: {epoch_time_elapsed:.2f}\n")
   
 
   model.load_state_dict(best_model_weights)
