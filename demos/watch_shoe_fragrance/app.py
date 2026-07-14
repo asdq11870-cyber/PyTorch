@@ -8,6 +8,7 @@ import json
 
 with open("class_names.json", "r") as f:
     class_names = json.load(f)
+class_names = sorted(class_names, key=class_names.get)
 
 effnetb2, effnetb2_transform = create_effnetb2_model(num_classes=len(class_names))
 effnetb2.load_state_dict(torch.load(f="effnetb2.pth",map_location=torch.device("cpu")))
