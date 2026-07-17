@@ -7,10 +7,10 @@ from typing import Tuple, Dict, List
 
 
 class ImageFolderCustom(Dataset):
-  def __init__(self, target_dir:str, transform=None) -> None:
-    self.paths = list(Path(target_dir).glob("*/*.jpg"))
+  def __init__(self, root:str, transform=None) -> None:
+    self.paths = list(Path(root).glob("*/*.jpg"))
     self.transforms = transform
-    self.classes, self.class_to_idx = find_classes(target_dir)
+    self.classes, self.class_to_idx = find_classes(root)
 
   def load_image(self, index:int) -> Image.Image:
     image_path = self.paths[index]

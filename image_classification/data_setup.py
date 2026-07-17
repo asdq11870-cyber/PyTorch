@@ -1,7 +1,8 @@
 import torch
 from torch.utils.data import DataLoader
-from torchvision import transforms, datasets
+from torchvision import transforms
 import os
+from datasets import ImageFolderCustom
 NUM_WORKERS = os.cpu_count()
 
 
@@ -39,15 +40,15 @@ def create_dataloaders(
     class_names: The names of the classes in the dataset
   """
 
-  train_dataset = datasets.ImageFolder(
+  train_dataset = ImageFolderCustom(
       root=train_dir, transform=train_transform,
   )
 
-  val_dataset = datasets.ImageFolder(
+  val_dataset = ImageFolderCustom(
       root=val_dir, transform=test_and_val_transform
   )
 
-  test_dataset = datasets.ImageFolder(
+  test_dataset = ImageFolderCustom(
       root=test_dir, transform=test_and_val_transform,
 
   )

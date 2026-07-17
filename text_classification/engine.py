@@ -19,7 +19,9 @@ def batch_train(model:torch.nn.Module,
                 writer: torch.utils.tensorboard.SummaryWriter | None,
                 scheduler: torch.optim.lr_scheduler.LRScheduler | None,
                 model_name:str,
-                target_dir:str):
+                target_dir:str,
+                vocab_size:int,
+                grad_clip:float=1.0):
   """
   Function for training batches of data using dataloaders
 
@@ -54,9 +56,7 @@ def batch_train(model:torch.nn.Module,
 
   results = {
       "train_loss": [],
-      "train_acc": [],
-      "val_loss": [],
-      "val_acc": []
+      "val_loss": []
   }
 
   # if writer is not None:
@@ -68,44 +68,41 @@ def batch_train(model:torch.nn.Module,
   for epoch in range(epochs):
       epoch_start = timer()
       print(f"Epoch: {epoch+1} \n ---------------------------------------------------------")
-      train_loss, train_correct, train_total = 0.0, 0, 0
+      train_loss = 0.0
       for batch, (x,y) in enumerate(train_data_loader):
           x,y = x.to(device), y.to(device)
           model.train()
           y_logits = model(x)
-          loss = loss_fn(y_logits, y)
+          loss = loss_fn(
+             y_logits.view(-1, vocab_size),
+             y.view(-1)
+          )
           train_loss += loss.item()
-          y_pred_labels = y_logits.argmax(dim=1)
-          train_correct += (y_pred_labels == y).sum().item()
-          train_total += y.size(0)
           optimiser.zero_grad()
           loss.backward()
+          torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
           optimiser.step()
 
           #if batch % 400 == 0:
               #print(f"Looked at {batch*len(x)}/{len(data_loader.dataset)} samples")
 
       train_loss /= len(train_data_loader)
-      train_acc = 100 * (train_correct / train_total)
 
-      val_loss, val_correct, val_total = 0.0,0,0
+      val_loss = 0.0
       model.eval()
       with torch.inference_mode():
           for x,y in val_data_loader:
               x,y = x.to(device), y.to(device)
               val_logits = model(x)
-              val_loss += loss_fn(val_logits, y).item()
-              val_pred_labels = val_logits.argmax(dim=1)
-              val_correct += (val_pred_labels == y).sum().item()
-              val_total += y.size(0)
+              val_loss += loss_fn(
+                 val_logits.view(-1, vocab_size),
+                 y.view(-1)
+              ).item()
 
           val_loss /= len(val_data_loader)
-          val_acc = 100 * (val_correct / val_total)
 
       results["train_loss"].append(train_loss)
-      results["train_acc"].append(train_acc)
       results["val_loss"].append(val_loss)
-      results["val_acc"].append(val_acc)
       
       overfit_counter = detect_overfitting(results,epoch,overfit_counter)
 
@@ -131,35 +128,25 @@ def batch_train(model:torch.nn.Module,
            global_step=epoch
        )
 
-       writer.add_scalars(
-           main_tag="Accuracy",
-           tag_scalar_dict={
-               "train_acc":train_acc,
-               "val_acc":val_acc
-           },
-           global_step=epoch
-       )
-
       epoch_time_elapsed = timer() - epoch_start
       if epoch % divisor == 0:
-          print(f"\nTrain Loss: {train_loss:.5f} | Train Accuracy: {train_acc:.2f}% | Validation Loss: {val_loss:.5f} | Validation Accuracy: {val_acc:.2f}% | Time of Epoch: {epoch_time_elapsed:.2f}\n")
+          print(f"\nTrain Loss: {train_loss:.5f} | Validation Loss: {val_loss:.5f} | Time of Epoch: {epoch_time_elapsed:.2f}\n")
   
 
   model.load_state_dict(best_model_weights)
   model.eval()
-  test_loss, test_correct, test_total = 0,0,0
+  test_loss = 0.0
   with torch.inference_mode():
        for x,y in test_data_loader:
             x,y = x.to(device),y.to(device)
             test_logits=model(x)
-            test_loss += loss_fn(test_logits, y).item()
-            test_pred = test_logits.argmax(dim=1)
-            test_correct += (test_pred == y).sum().item()
-            test_total += y.size(0)
+            test_loss += loss_fn(
+              test_logits.view(-1, vocab_size),
+              y.view(-1)
+            ).item()
 
   test_loss /= len(test_data_loader)
-  test_acc = 100 * (test_correct / test_total)
-  print(f"Test Loss: {test_loss:.5f} | Test Accuracy: {test_acc:.2f}%")   
+  print(f"Test Loss: {test_loss:.5f}")   
       
   if writer is not None: writer.close()
   end = timer()
@@ -240,21 +227,15 @@ def plot_loss_curves(results):
   Args:
       results (dict): dictionary containing list of values, e.g.
           {"train_loss": [...],
-            "train_acc": [...],
             "val_loss": [...],
-            "val_acc": [...]}
   """
   loss = results["train_loss"]
   val_loss = results["val_loss"]
-
-  accuracy = results["train_acc"]
-  val_accuracy = results["val_acc"]
 
   epochs = range(len(results["train_loss"]))
 
   plt.figure(figsize=(15, 7))
 
-  # Plot loss
   plt.subplot(1, 2, 1)
   plt.plot(epochs, loss, label="train_loss")
   plt.plot(epochs, val_loss, label="val_loss")
@@ -262,13 +243,6 @@ def plot_loss_curves(results):
   plt.xlabel("Epochs")
   plt.legend()
 
-  # Plot accuracy
-  plt.subplot(1, 2, 2)
-  plt.plot(epochs, accuracy, label="train_accuracy")
-  plt.plot(epochs, val_accuracy, label="val_accuracy")
-  plt.title("Accuracy")
-  plt.xlabel("Epochs")
-  plt.legend()
 
 def training_finished():
   """
