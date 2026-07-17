@@ -1,6 +1,6 @@
-import torchvision #type: ignore
+import torchvision
 from typing import List, Dict
-import torch #type: ignore
+import torch
 import matplotlib.pyplot as plt
 from timeit import default_timer as timer
 from pathlib import Path

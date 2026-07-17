@@ -1,7 +1,7 @@
-import torch # pyright: ignore[reportMissingImports]
+import torch
 import matplotlib.pyplot as plt
 from timeit import default_timer as timer
-from torch.utils.tensorboard import SummaryWriter # pyright: ignore[reportMissingImports]
+from torch.utils.tensorboard import SummaryWriter
 from going_modular.utils import saving_model
 import copy
 from pathlib import Path

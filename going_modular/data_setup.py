@@ -1,6 +1,6 @@
-import torch # pyright: ignore[reportMissingImports]
-from torch.utils.data import DataLoader  # type: ignore
-from torchvision import transforms, datasets # type: ignore
+import torch
+from torch.utils.data import DataLoader
+from torchvision import transforms, datasets
 import os
 NUM_WORKERS = os.cpu_count()
 

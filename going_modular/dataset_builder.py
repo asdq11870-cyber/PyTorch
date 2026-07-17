@@ -1,5 +1,5 @@
-import torch #type: ignore
-from torch.utils.data import Dataset #type: ignore
+import torch 
+from torch.utils.data import Dataset
 from PIL import Image
 from going_modular.utils import find_classes
 from pathlib import Path

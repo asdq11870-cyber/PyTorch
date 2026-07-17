@@ -4,10 +4,10 @@ from tkinter import Image
 import zipfile
 from matplotlib import pyplot as plt
 import requests
-import torch # pyright: ignore[reportMissingImports]
+import torch
 import random
 from typing import Tuple, List, Dict
-import torchvision #pyright: ignore[reportMissingImports]
+import torchvision
 from timeit import default_timer as timer
 from PIL import Image
 
