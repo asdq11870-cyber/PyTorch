@@ -1,7 +1,5 @@
 import torch
 from torch.utils.data import Dataset
-from pathlib import Path
-from typing import Tuple, List, Dict
 
 class TextCustom(Dataset):
     def __init__(self, tokens, context_length):

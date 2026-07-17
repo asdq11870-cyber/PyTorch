@@ -42,12 +42,15 @@ def batch_train(model:torch.nn.Module,
     them to tensorboard
     model_name: This name is used in the filepath for saving our model
     target_dir: The directory where our model is saved to
+    vocab_size: The amount of words in the text
+    grad_clip: The maximum allowed gradient
 
   Returns:
     Nothing
   """
   start = timer()
   patience = 20 # Increasing from 10 to 20 as the schedular will decrease the lr overtime
+  scaler = torch.amp.GradScaler(device=device)
   overfit_counter = 0
   epochs_no_imp = 0
   best_model_loss = float("inf")
@@ -72,16 +75,23 @@ def batch_train(model:torch.nn.Module,
       for batch, (x,y) in enumerate(train_data_loader):
           x,y = x.to(device), y.to(device)
           model.train()
-          y_logits = model(x)
-          loss = loss_fn(
-             y_logits.view(-1, vocab_size),
-             y.view(-1)
-          )
+          with torch.autocast(device_type=device.type, dtype=torch.float16):
+            y_logits = model(x)
+            loss = loss_fn(
+              y_logits.view(-1, vocab_size),
+              y.view(-1)
+            )
           train_loss += loss.item()
-          optimiser.zero_grad()
-          loss.backward()
+          optimiser.zero_grad() # zeros the previous gradient so previous epochs don't contaminate the batch
+          scaler.scale(loss).backward() # float.16 gradient values can become zero and vanish so we scale up the losses
+          # and then do backpropagation
+          scaler.unscale(optimiser)
+          # we undo the scaling once done
           torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
-          optimiser.step()
+          # prevents gradient weights from going above grad_clip and blowing up the weights
+          scaler.step(optimiser)
+          if scheduler is not None:
+             scheduler.step()
 
           #if batch % 400 == 0:
               #print(f"Looked at {batch*len(x)}/{len(data_loader.dataset)} samples")
@@ -93,11 +103,12 @@ def batch_train(model:torch.nn.Module,
       with torch.inference_mode():
           for x,y in val_data_loader:
               x,y = x.to(device), y.to(device)
-              val_logits = model(x)
-              val_loss += loss_fn(
-                 val_logits.view(-1, vocab_size),
-                 y.view(-1)
-              ).item()
+              with torch.autocast(device_type=device.type, dtype=torch.float16):
+                val_logits = model(x)
+                val_loss += loss_fn(
+                  val_logits.view(-1, vocab_size),
+                  y.view(-1)
+                ).item()
 
           val_loss /= len(val_data_loader)
 
@@ -114,9 +125,6 @@ def batch_train(model:torch.nn.Module,
       if(epochs_no_imp >= patience):
           print("Loss is stagnant. Prematurely ending training!")
           break
-      
-      if scheduler is not None:
-          scheduler.step()
 
       if writer is not None:
        writer.add_scalars(
@@ -139,11 +147,12 @@ def batch_train(model:torch.nn.Module,
   with torch.inference_mode():
        for x,y in test_data_loader:
             x,y = x.to(device),y.to(device)
-            test_logits=model(x)
-            test_loss += loss_fn(
-              test_logits.view(-1, vocab_size),
-              y.view(-1)
-            ).item()
+            with torch.autocast(device_type=device.type, dtype=torch.float16):
+              test_logits=model(x)
+              test_loss += loss_fn(
+                test_logits.view(-1, vocab_size),
+                y.view(-1)
+              ).item()
 
   test_loss /= len(test_data_loader)
   print(f"Test Loss: {test_loss:.5f}")   
