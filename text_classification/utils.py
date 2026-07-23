@@ -168,3 +168,47 @@ def model_size_and_params(model, model_savepath) -> Dict:
   model_size = Path(model_savepath).stat().st_size // (1024**2)
   total_params = sum(torch.numel(param) for param in model.parameters())
   return {"MODEL_SIZE":model_size,"TOTAL_PARAMETERS":total_params}
+
+def can_fit_batch(model:torch.nn.Module, input_shape, batch_size:int, device: torch.device):
+  model = model.to(device)
+  model.train()
+
+  try:
+    torch.cuda.empty_cache()
+    torch.cuda.reset_peak_memory_stats(device)
+    x = torch.randn(batch_size, *input_shape, device=device)
+    output = model(x)
+    loss = output.mean()
+    loss.backward()
+    del x, output, loss
+    torch.cuda.empty_cache()
+    return True
+  except RuntimeError as e:
+    if "out of memory" in str(e).lower():
+      torch.cuda.empty_cache()
+      return False
+    raise
+
+def find_max_batch_size(
+    model,
+    input_shape,
+    device,
+    start=1,
+    max_batch=2048,
+):
+    """
+    Finds the maximum batch size that fits using binary search.
+    """
+    low = start
+    high = start
+    while high <= max_batch and can_fit_batch(model, input_shape, high, device):
+        low = high
+        high *= 2
+    high = min(high, max_batch)
+    while low + 1 < high:
+        mid = (low + high) // 2
+        if can_fit_batch(model, input_shape, mid, device):
+            low = mid
+        else:
+            high = mid
+    return low
