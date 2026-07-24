@@ -153,8 +153,8 @@ class GPT(nn.Module):
     
     super().__init__()
     self.token_embedding = TokenEmbedding(vocab_size=vocab_size, embed_dim=embed_dim)
-    self.positional_embedding = nn.Parameter(torch.randn((1,vocab_size+1,embed_dim)))
-    self.dropout = nn.Dropout(p=0.1, inplace=True)
+    self.positional_embedding = nn.Parameter(torch.randn((1,context_length,embed_dim)))
+    self.dropout = nn.Dropout(p=0.1)
     self.norm = nn.LayerNorm(embed_dim)
     self.encoder_blocks = nn.ModuleList(
       [
