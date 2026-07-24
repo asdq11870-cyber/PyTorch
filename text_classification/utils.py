@@ -176,7 +176,13 @@ def can_fit_batch(model:torch.nn.Module, input_shape, batch_size:int, device: to
   try:
     torch.cuda.empty_cache()
     torch.cuda.reset_peak_memory_stats(device)
-    x = torch.randn(batch_size, *input_shape, device=device)
+    x = torch.randint(
+        0,
+        model.vocab_size,
+        (batch_size, *input_shape),
+        device=device,
+        dtype=torch.long
+    )
     output = model(x)
     loss = output.mean()
     loss.backward()
