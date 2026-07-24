@@ -1,7 +1,7 @@
 import torch
 from torch.utils.data import DataLoader
 import os
-from datasets.TextCustom import TextCustom
+from custom_datasets.TextCustom import TextCustom
 NUM_WORKERS = os.cpu_count()
 
 
