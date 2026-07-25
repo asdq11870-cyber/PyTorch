@@ -152,21 +152,30 @@ class GPT(nn.Module):
                     num_encoder_layers, context_length):
     
     super().__init__()
-    self.token_embedding = TokenEmbedding(vocab_size=vocab_size, embed_dim=embed_dim)
-    self.positional_embedding = nn.Parameter(torch.randn((1,context_length,embed_dim)))
+    self.vocab_size = vocab_size
+    self.embed_dim = embed_dim
+    self.mlp_dim = mlp_dim
+    self.attn_dropout = attn_dropout
+    self.mlp_dropout = mlp_dropout
+    self.num_encoder_layers = num_encoder_layers
+    self.context_length = context_length
+    self.heads = heads
+
+    self.token_embedding = TokenEmbedding(vocab_size=self.vocab_size, embed_dim=self.embed_dim)
+    self.positional_embedding = nn.Parameter(torch.randn((1,self.context_length,self.embed_dim)))
     self.dropout = nn.Dropout(p=0.1)
-    self.norm = nn.LayerNorm(embed_dim)
+    self.norm = nn.LayerNorm(self.embed_dim)
     self.encoder_blocks = nn.ModuleList(
       [
         GPTTransformBlock(
-          embed_dim=embed_dim, heads=heads, mlp_dim=mlp_dim,
-          mlp_dropout=mlp_dropout,attn_dropout=attn_dropout
+          embed_dim=self.embed_dim, heads=self.heads, mlp_dim=self.mlp_dim,
+          mlp_dropout=self.mlp_dropout,attn_dropout=self.attn_dropout
         )
-        for _ in range(num_encoder_layers)
+        for _ in range(self.num_encoder_layers)
       ]
     )
     self.LLM_head = nn.Linear(
-      in_features=embed_dim, out_features=vocab_size
+      in_features=self.embed_dim, out_features=self.vocab_size
     )
 
   def forward(self, x):
