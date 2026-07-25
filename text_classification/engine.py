@@ -85,7 +85,7 @@ def batch_train(model:torch.nn.Module,
           optimiser.zero_grad() # zeros the previous gradient so previous epochs don't contaminate the batch
           scaler.scale(loss).backward() # float.16 gradient values can become zero and vanish so we scale up the losses
           # and then do backpropagation
-          scaler.unscale(optimiser)
+          scaler.unscale_(optimiser)
           # we undo the scaling once done
           torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
           # prevents gradient weights from going above grad_clip and blowing up the weights
