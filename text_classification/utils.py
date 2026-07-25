@@ -169,31 +169,38 @@ def model_size_and_params(model, model_savepath) -> Dict:
   total_params = sum(torch.numel(param) for param in model.parameters())
   return {"MODEL_SIZE":model_size,"TOTAL_PARAMETERS":total_params}
 
-def can_fit_batch(model:torch.nn.Module, input_shape, batch_size:int, device: torch.device):
-  model = model.to(device)
-  model.train()
+def can_fit_batch(model: torch.nn.Module, input_shape, batch_size: int, device: torch.device):
+    model = model.to(device)
+    model.train()
 
-  try:
-    torch.cuda.empty_cache()
-    torch.cuda.reset_peak_memory_stats(device)
-    x = torch.randint(
-        0,
-        model.vocab_size,
-        (batch_size, *input_shape),
-        device=device,
-        dtype=torch.long
-    )
-    output = model(x)
-    loss = output.mean()
-    loss.backward()
-    del x, output, loss
-    torch.cuda.empty_cache()
-    return True
-  except RuntimeError as e:
-    if "out of memory" in str(e).lower():
-      torch.cuda.empty_cache()
-      return False
-    raise
+    try:
+        torch.cuda.empty_cache()
+        model.zero_grad(set_to_none=True)
+
+        x = torch.randint(
+            0,
+            model.vocab_size,
+            (batch_size, *input_shape),
+            device=device,
+            dtype=torch.long
+        )
+
+        output = model(x)
+        loss = output.mean()
+        loss.backward()
+
+        del x, output, loss
+        model.zero_grad(set_to_none=True)
+        torch.cuda.empty_cache()
+
+        return True
+
+    except RuntimeError as e:
+        if "out of memory" in str(e).lower():
+            model.zero_grad(set_to_none=True)
+            torch.cuda.empty_cache()
+            return False
+        raise
 
 def find_max_batch_size(
     model,
