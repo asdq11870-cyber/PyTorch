@@ -75,7 +75,7 @@ def batch_train(model:torch.nn.Module,
       for batch, (x,y) in enumerate(train_data_loader):
           x,y = x.to(device), y.to(device)
           model.train()
-          with torch.autocast(device_type=device.type, dtype=torch.float16):
+          with torch.autocast(device_type=torch.device(device).type, dtype=torch.float16):
             y_logits = model(x)
             loss = loss_fn(
               y_logits.view(-1, vocab_size),
