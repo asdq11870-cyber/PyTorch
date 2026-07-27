@@ -56,6 +56,7 @@ def batch_train(model:torch.nn.Module,
   best_model_loss = float("inf")
   best_stagnation_loss = float("inf")
   best_model_weights = copy.deepcopy(model.state_dict())
+  accum_steps = 4
 
   results = {
       "train_loss": [],
@@ -71,30 +72,35 @@ def batch_train(model:torch.nn.Module,
   for epoch in range(epochs):
       epoch_start = timer()
       print(f"Epoch: {epoch+1} \n ---------------------------------------------------------")
-      train_loss = 0.0
-      for batch, (x,y) in enumerate(train_data_loader):
+      train_loss = 0.0          
+      model.train()
+      optimiser.zero_grad()
+      for i, (x,y) in enumerate(train_data_loader):
           x,y = x.to(device), y.to(device)
-          model.train()
           with torch.autocast(device_type=device.type, dtype=torch.float16):
             y_logits = model(x)
             loss = loss_fn(
               y_logits.view(-1, vocab_size),
               y.view(-1)
             )
-          train_loss += loss.item()
-          optimiser.zero_grad() # zeros the previous gradient so previous epochs don't contaminate the batch
+            train_loss += loss.item()
+            loss = loss / accum_steps # Scaling loss so accumulated gradient match a large batch
+          
           scaler.scale(loss).backward() # float.16 gradient values can become zero and vanish so we scale up the losses
           # and then do backpropagation
-          scaler.unscale_(optimiser)
-          # we undo the scaling once done
-          torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
-          # prevents gradient weights from going above grad_clip and blowing up the weights
-          scaler.step(optimiser)
-          scaler.update()
-          
+          is_last_batch = (i+1) == len(train_data_loader)
+          # Optimiser is changed in batches of 4 so the if the dataloader is not divisible by 4 the remaining batch gradient are discarded
+          # This allows the inclusion of the last remaining batches
+          if(i+1) % accum_steps == 0 or is_last_batch:
+            scaler.unscale_(optimiser)
+            # we undo the scaling once done
+            torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
+            # prevents gradient weights from going above grad_clip and blowing up the weights
+            scaler.step(optimiser)
+            scaler.update()
+            optimiser.zero_grad() # zeros the previous gradient so previous epochs don't contaminate the batch
 
-          #if batch % 400 == 0:
-              #print(f"Looked at {batch*len(x)}/{len(data_loader.dataset)} samples")
+          
       train_loss /= len(train_data_loader)
 
       val_loss = 0.0
