@@ -179,6 +179,7 @@ class GPT(nn.Module):
     )
 
   def forward(self, x):
+    self.token_embedding = self.token_embedding.to(x.device)
     x = self.token_embedding(x)
     x = x + self.positional_embedding
     x = self.dropout(x)
