@@ -21,6 +21,7 @@ def batch_train(model:torch.nn.Module,
                 model_name:str,
                 target_dir:str,
                 vocab_size:int,
+                accum_steps:int,
                 grad_clip:float=1.0):
   """
   Function for training batches of data using dataloaders
@@ -43,6 +44,7 @@ def batch_train(model:torch.nn.Module,
     model_name: This name is used in the filepath for saving our model
     target_dir: The directory where our model is saved to
     vocab_size: The amount of words in the text
+    accum_steps: The amount of epochs between optimiser updates
     grad_clip: The maximum allowed gradient
 
   Returns:
@@ -56,7 +58,6 @@ def batch_train(model:torch.nn.Module,
   best_model_loss = float("inf")
   best_stagnation_loss = float("inf")
   best_model_weights = copy.deepcopy(model.state_dict())
-  accum_steps = 4
 
   results = {
       "train_loss": [],
