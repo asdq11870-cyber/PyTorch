@@ -90,12 +90,11 @@ def batch_train(model:torch.nn.Module,
           torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
           # prevents gradient weights from going above grad_clip and blowing up the weights
           scaler.step(optimiser)
-          if scheduler is not None:
-             scheduler.step()
+          scaler.update()
+          
 
           #if batch % 400 == 0:
               #print(f"Looked at {batch*len(x)}/{len(data_loader.dataset)} samples")
-
       train_loss /= len(train_data_loader)
 
       val_loss = 0.0
@@ -139,6 +138,9 @@ def batch_train(model:torch.nn.Module,
       epoch_time_elapsed = timer() - epoch_start
       if epoch % divisor == 0:
           print(f"\nTrain Loss: {train_loss:.5f} | Validation Loss: {val_loss:.5f} | Time of Epoch: {epoch_time_elapsed:.2f}\n")
+
+      if scheduler is not None:
+          scheduler.step()
   
 
   model.load_state_dict(best_model_weights)
