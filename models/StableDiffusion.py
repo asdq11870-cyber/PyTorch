@@ -17,10 +17,11 @@ class TimestepEmbedding(nn.Module):
     def __init__(self, embed_dim):
         super().__init__()
         self.embed_dim = embed_dim
+        assert self.embed_dim % 2 == 0, "Embedded Dimension should be even!"
 
     def forward(self, timestep:torch.Tensor):
-        x = torch.zeros(1, self.embed_dim)
-        j = torch.zeros([1])
+        x = torch.zeros(timestep.shape[0], self.embed_dim).to(device=timestep.device, dtype="float32")
+        j = 0
         for i in range(0,self.embed_dim,2):
             x[:,i] = torch.sin(timestep/torch.pow(10000,(2*j)/self.embed_dim))
             x[:,i+1] = torch.cos(timestep/torch.pow(10000,(2*j)/self.embed_dim))    
