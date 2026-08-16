@@ -14,26 +14,77 @@ from torch import nn
 # 11. StableDiffusion         # nn.Module
 
 class TimestepEmbedding(nn.Module):
-    def __init__(self, embed_dim):
+    """
+    Converting the timestep to a 1D vector quantity for each image given in a batch
+
+    A 1D vector of zeros is created with a batch number of rows and embedded dimension
+    for the number of columns. The code is made device agnostic and converting to an 
+    essential datatype. Then apply the frequency equation 2i: sin(t/10000^2j/embed_dim)
+    and 2i+1: cos(t/10000^2j/embed_dim). This tensor is then pass through a mlp projection
+    or learnable projection to prepare it for the injection into the ResNet blocks
+
+    Args:
+        embed_dim: The embedded dimension
+        timestep: The scalar we want to convert into a vector
+    Returns:
+        a: The 1D timestep vector for each image
+
+    Example:
+        a: (batch_size, embed_dim)
+        After for loop: (batch_size, embed_dim)
+        After projection: (batch_size, 1280)
+    """
+    def __init__(self, embed_dim:int):
         super().__init__()
         self.embed_dim = embed_dim
         assert self.embed_dim % 2 == 0, "Embedded Dimension should be even!"
+        self.time_mlp_projection = nn.Sequential(
+            nn.Linear(in_features=320, out_features=1280),
+            nn.SiLU(),
+            nn.Linear(in_features=1280,out_features=1280)
+        )
 
-    def forward(self, timestep:torch.Tensor):
-        x = torch.zeros(timestep.shape[0], self.embed_dim).to(device=timestep.device, dtype="float32")
+    def forward(self, timestep:torch.Tensor) -> torch.Tensor:
+        a = torch.zeros(timestep.shape[0], self.embed_dim).to(device=timestep.device, dtype="float32")
         j = 0
         for i in range(0,self.embed_dim,2):
-            x[:,i] = torch.sin(timestep/torch.pow(10000,(2*j)/self.embed_dim))
-            x[:,i+1] = torch.cos(timestep/torch.pow(10000,(2*j)/self.embed_dim))    
-            j += 1 
-        return x
+            a[:,i] = torch.sin(timestep/torch.pow(10000,(2*j)/self.embed_dim))
+            a[:,i+1] = torch.cos(timestep/torch.pow(10000,(2*j)/self.embed_dim))    
+            j += 1
+        a = self.time_mlp_projection(a)
+        return a
 
 class ResNet(nn.Module):
-    def __init__(self):
+    def __init__(self, embed_dim:int):
         super().__init__()
+        self.embed_dim = embed_dim
+        self.timestep_projection = nn.Linear(
+            in_features=1280, out_features=320
+        )
+        self.conv1 = nn.Conv2d(
+            in_channels=320, out_channels=320,
+            kernel_size=(3,3), stride=1, padding=0
+        )
+        self.conv2 = nn.Conv2d(
+            in_channels=320, out_channels=320,
+            kernel_size=(3,3), stride=1, padding=0
+        )
 
-    def forward(self, x:torch.Tensor):
-        pass
+    def forward(self, x:torch.Tensor, timestep:torch.Tensor):
+        residual = x
+        x = nn.GroupNorm(x)
+        x = nn.SiLU(x)
+        x = self.conv1(x)
+        t = timestep
+        t = self.timestep_projection(t)
+        t = t.reshape(t.shape[0],t.shape[1],1,1)
+        x = x + t
+        x = nn.GroupNorm(x)
+        x = nn.SiLU(x)
+        x = self.conv2(x)
+        x = x + residual
+        return x
+        
 
 class Downsample(nn.Module):
     def __init__(self):
