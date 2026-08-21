@@ -34,14 +34,14 @@ class TimestepEmbedding(nn.Module):
         After for loop: (batch_size, embed_dim)
         After projection: (batch_size, 1280)
     """
-    def __init__(self, embed_dim:int):
+    def __init__(self, embed_dim:int, expanded_channels:int):
         super().__init__()
         self.embed_dim = embed_dim
         assert self.embed_dim % 2 == 0, "Embedded Dimension should be even!"
         self.time_mlp_projection = nn.Sequential(
-            nn.Linear(in_features=320, out_features=1280),
+            nn.Linear(in_features=embed_dim, out_features=expanded_channels),
             nn.SiLU(),
-            nn.Linear(in_features=1280,out_features=1280)
+            nn.Linear(in_features=expanded_channels,out_features=expanded_channels)
         )
 
     def forward(self, timestep:torch.Tensor) -> torch.Tensor:
@@ -55,34 +55,40 @@ class TimestepEmbedding(nn.Module):
         return a
 
 class ResNet(nn.Module):
-    def __init__(self, embed_dim:int):
+    def __init__(self, in_channels:int, out_channels:int, expanded_channels:int, num_groups:int):
         super().__init__()
-        self.embed_dim = embed_dim
         self.timestep_projection = nn.Linear(
-            in_features=1280, out_features=320
+            in_features=expanded_channels, out_features=out_channels
+        )
+        self.residual_projection = nn.Linear(
+            in_features=in_channels, out_features=out_channels
         )
         self.conv1 = nn.Conv2d(
-            in_channels=320, out_channels=320,
-            kernel_size=(3,3), stride=1, padding=0
+            in_channels=in_channels, out_channels=out_channels,
+            kernel_size=(3,3), stride=1, padding=1
         )
         self.conv2 = nn.Conv2d(
-            in_channels=320, out_channels=320,
-            kernel_size=(3,3), stride=1, padding=0
+            in_channels=out_channels, out_channels=out_channels,
+            kernel_size=(3,3), stride=1, padding=1
         )
+        self.silu1 = nn.SiLU()
+        self.silu2 = nn.SiLU()
+        self.groupnorm1 = nn.GroupNorm(num_groups=num_groups, num_channels=in_channels)
+        self.groupnorm2 = nn.GroupNorm(num_groups=num_groups, num_channels=out_channels)
 
-    def forward(self, x:torch.Tensor, timestep:torch.Tensor):
+    def forward(self, x:torch.Tensor, timestep_vector:torch.Tensor):
         residual = x
-        x = nn.GroupNorm(x)
-        x = nn.SiLU(x)
+        x = self.groupnorm1(x)
+        x = self.silu1(x)
         x = self.conv1(x)
-        t = timestep
+        t = timestep_vector
         t = self.timestep_projection(t)
         t = t.reshape(t.shape[0],t.shape[1],1,1)
         x = x + t
-        x = nn.GroupNorm(x)
-        x = nn.SiLU(x)
+        x = self.groupnorm2(x)
+        x = self.silu2(x)
         x = self.conv2(x)
-        x = x + residual
+        x = x + self.residual_projection(residual)
         return x
         
 
