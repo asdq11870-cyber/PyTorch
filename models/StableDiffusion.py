@@ -60,8 +60,9 @@ class ResNet(nn.Module):
         self.timestep_projection = nn.Linear(
             in_features=expanded_channels, out_features=out_channels
         )
-        self.residual_projection = nn.Linear(
-            in_features=in_channels, out_features=out_channels
+        self.residual_conv = nn.Conv2d(
+            in_channels=in_channels, out_channels=out_channels,
+            kernel_size=(1,1), stride=1, padding=1
         )
         self.conv1 = nn.Conv2d(
             in_channels=in_channels, out_channels=out_channels,
