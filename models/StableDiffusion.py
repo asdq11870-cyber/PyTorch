@@ -26,6 +26,8 @@ class TimestepEmbedding(nn.Module):
     Args:
         embed_dim: The embedded dimension
         timestep: The scalar we want to convert into a vector
+        expanded_channels: The channels used in the mlp projection to add features and non-linearity
+
     Returns:
         a: The 1D timestep vector for each image
 
@@ -55,6 +57,9 @@ class TimestepEmbedding(nn.Module):
         return a
 
 class ResNet(nn.Module):
+    """
+    
+    """
     def __init__(self, in_channels:int, out_channels:int, expanded_channels:int, num_groups:int):
         super().__init__()
         self.timestep_projection = nn.Linear(
@@ -89,7 +94,7 @@ class ResNet(nn.Module):
         x = self.groupnorm2(x)
         x = self.silu2(x)
         x = self.conv2(x)
-        x = x + self.residual_projection(residual)
+        x = x + self.residual_conv(residual)
         return x
         
 
