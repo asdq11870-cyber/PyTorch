@@ -58,7 +58,43 @@ class TimestepEmbedding(nn.Module):
 
 class ResNet(nn.Module):
     """
-    
+    Adding the timestep vector to a latent representation of the image
+
+    A projection and several convolutions, SiLU activations, and group 
+    normalisations are initalised in the constructor. The latent image
+    passes through the first group normalisation and activation, then
+    pass through a convolution that does god know what. The timestep 
+    vector is projected from the expanded_channels in the mlp step to 
+    the out_channels corresponding to the channels in the U-Net. The 
+    vector is then reshaped to add two new dimensions and concatenated 
+    to the latent image. The latent images then pass through a second
+    group normalisation and activation, then pass through a convolution 
+    that does god know what. The final output of the ResNet block is 
+    also concatenated to the initial latent image tensors for god knows
+    what.
+
+    Args:
+        in_channels: The input channels of the ResNet block
+        out_channels: The output channels of the ResNet block
+        expanded_channels: The mlp channels
+        num_groups: The amount of groups that pass through the group norm
+        x: The original latent image tensor
+        timestep_vector: The 2D timestep vector
+
+    Returns:
+        x: The latent image tensor which has timestep embeddings and original latent information
+
+    Example:
+        x: (batch_size, in_channels, height, width)
+        after groupnorm1: (batch_size, in_channels, height, width)
+        after silu1: (batch_size, in_channels, height, width)
+        after conv1: (batch_size, out_channels, height, width)
+        after timestep embedding: (batch_size, out_channels, height, width)
+        after groupnorm2: (batch_size, out_channels, height, width)
+        after silu2: (batch_size, out_channels, height, width)
+        after conv2: (batch_size, out_channels, height, width)
+        after residual addition: (batch_size, out_channels, height, width)
+
     """
     def __init__(self, in_channels:int, out_channels:int, expanded_channels:int, num_groups:int):
         super().__init__()
@@ -67,7 +103,7 @@ class ResNet(nn.Module):
         )
         self.residual_conv = nn.Conv2d(
             in_channels=in_channels, out_channels=out_channels,
-            kernel_size=(1,1), stride=1, padding=1
+            kernel_size=(1,1), stride=1, padding=0
         )
         self.conv1 = nn.Conv2d(
             in_channels=in_channels, out_channels=out_channels,
@@ -82,7 +118,7 @@ class ResNet(nn.Module):
         self.groupnorm1 = nn.GroupNorm(num_groups=num_groups, num_channels=in_channels)
         self.groupnorm2 = nn.GroupNorm(num_groups=num_groups, num_channels=out_channels)
 
-    def forward(self, x:torch.Tensor, timestep_vector:torch.Tensor):
+    def forward(self, x:torch.Tensor, timestep_vector:torch.Tensor) -> torch.Tensor:
         residual = x
         x = self.groupnorm1(x)
         x = self.silu1(x)
