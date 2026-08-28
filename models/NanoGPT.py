@@ -19,7 +19,9 @@ class MultiHeadCasualSelfAttention(nn.Module):
   heads are concatenated and projected back to the original embedding
   dimension. We mask the tokens after the token we are focusing on to
   prevent cheating. This is done my creating a tensor of ones and
-  covering part of it and 
+  covering part of it. The attention score is made negative infinity if
+  a particular token is covered. Softmax and matrix multiplication with the 
+  value tensor. The final output matrix is transposed, reshaped and projected.  
 
   Args:
       embed_dim: Dimension of each token embedding.
