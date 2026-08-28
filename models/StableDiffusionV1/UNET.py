@@ -1,71 +1,5 @@
 import torch
 from torch import nn
-from CLIPTransformer import CLIPTransformer
-
-# VAE CLASSES ------------------------------------------------------------------
-
-class VAEEncoder(nn.Module):
-    def __init__(self):
-        super().__init__()
-
-    def forward(self, x:torch.Tensor):
-        pass
-
-class VAEDecoder(nn.Module):
-    def __init__(self):
-        super().__init__()
-
-    def forward(self, x:torch.Tensor):
-        pass
-
-class VAEResNet(nn.Module):
-    def __init__(self):
-        super().__init__()
-
-    def forward(self, x:torch.Tensor):
-        pass
-
-class VAEAttention(nn.Module):
-    def __init__(self):
-        super().__init__()
-
-    def forward(self, x:torch.Tensor):
-        pass
-
-class VAEDownsample(nn.Module):
-    def __init__(self):
-        super().__init__()
-
-    def forward(self, x:torch.Tensor):
-        pass
-
-class VAEUpsample(nn.Module):
-    def __init__(self):
-        super().__init__()
-
-    def forward(self, x:torch.Tensor):
-        pass
-
-class VAE(nn.Module):
-    def __init__(self):
-        super().__init__()
-
-    def forward(self, x:torch.Tensor):
-        pass
-
-class LatentDistribution(nn.Module):
-    def __init__(self):
-        super().__init__()
-
-    def forward(self, x:torch.Tensor):
-        pass
-
-# ------------------------------------------------------------------------------
-# ------------------------------------------------------------------------------
-# ------------------------------------------------------------------------------
-# ------------------------------------------------------------------------------
-
-# U-NET CLASSES ----------------------------------------------------------------
 
 class TimestepEmbedding(nn.Module):
     """
@@ -110,7 +44,7 @@ class TimestepEmbedding(nn.Module):
         a = self.time_mlp_projection(a)
         return a
 
-class UNETResNet(nn.Module):
+class ResNet(nn.Module):
     """
     Adding the timestep vector to a latent representation of the image
 
@@ -170,6 +104,7 @@ class UNETResNet(nn.Module):
         self.silu2 = nn.SiLU()
         self.groupnorm1 = nn.GroupNorm(num_groups=num_groups, num_channels=in_channels)
         self.groupnorm2 = nn.GroupNorm(num_groups=num_groups, num_channels=out_channels)
+        self.dropout = nn.Dropout2d(p=0.5, inplace=True)
 
     def forward(self, x:torch.Tensor, timestep_vector:torch.Tensor) -> torch.Tensor:
         residual = x
@@ -182,85 +117,63 @@ class UNETResNet(nn.Module):
         x = x + t
         x = self.groupnorm2(x)
         x = self.silu2(x)
+        x = self.dropout(x)
         x = self.conv2(x)
         x = x + self.residual_conv(residual)
         return x
         
-class UNETDownsample(nn.Module):
+class Downsample(nn.Module):
     def __init__(self):
         super().__init__()
 
     def forward(self, x:torch.Tensor):
         pass
 
-class UNETUpsample(nn.Module):
+class Upsample(nn.Module):
     def __init__(self):
         super().__init__()
 
     def forward(self, x:torch.Tensor):
         pass
 
-class UNETSelfAttentionBlock(nn.Module):
+class SelfAttentionBlock(nn.Module):
     def __init__(self):
         super().__init__()
 
     def forward(self, x:torch.Tensor):
         pass
 
-class UNETDownBlock(nn.Module):
+class DownBlock(nn.Module):
     def __init__(self):
         super().__init__()
 
     def forward(self, x:torch.Tensor):
         pass
 
-class UNETUpBlock(nn.Module):
+class UpBlock(nn.Module):
     def __init__(self):
         super().__init__()
 
     def forward(self, x:torch.Tensor):
         pass
 
-class UNETMidBlock(nn.Module):
+class MidBlock(nn.Module):
     def __init__(self):
         super().__init__()
 
     def forward(self, x:torch.Tensor):
         pass
 
-class UNETCrossAttentionBlock(nn.Module):
+class CrossAttentionBlock(nn.Module):
     def __init__(self):
         super().__init__()
 
     def forward(self, x:torch.Tensor):
         pass
 
-class UNet(nn.Module):
+class UNET(nn.Module):
     def __init__(self):
         super().__init__()
 
     def forward(self, x:torch.Tensor):
         pass
-
-# ------------------------------------------------------------------------------
-# ------------------------------------------------------------------------------
-# ------------------------------------------------------------------------------
-# ------------------------------------------------------------------------------
-
-# StableDiffusion CLASSES ------------------------------------------------------
-
-class DiffusionSchedular():
-    def __init__(self):
-        pass
-
-class DiffusionSampler():
-    def __init__(self):
-        pass
-
-class StableDiffusion(nn.Module):
-    def __init__(self):
-        super().__init__()
-
-    def forward(self, x:torch.Tensor):
-        pass
-
