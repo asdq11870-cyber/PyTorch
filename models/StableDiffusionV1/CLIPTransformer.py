@@ -30,7 +30,7 @@ class Embedding(nn.Module):
         After addition, x:(batch_size, tokens, embed_dim)
         Output, x:(batch_size, tokens, embed_dim)
     """
-    def __init__(self, embed_dim, vocab_size, max_seq_len):
+    def __init__(self, embed_dim:int, vocab_size:int, max_seq_len:int):
         super().__init__()
         self.max_seq_len = max_seq_len
         self.embed_dim = embed_dim
@@ -73,7 +73,7 @@ class MultiHeadCausalSelfAttention(nn.Module):
           Attention Scores: (batch_size, self.heads, tokens, tokens)
           After projection: (batch_size, tokens, self.embed_dim)
       """
-    def __init__(self, embed_dim, heads):
+    def __init__(self, embed_dim:int, heads:int):
         super().__init__()
         self.embed_dim = embed_dim
         self.heads = heads
@@ -144,7 +144,7 @@ class FeedForward(nn.Module):
         After 2nd linear projection: (batch_size, tokens, self.embed_dim)
         x: (batch_size, tokens, self.embed_dim)
     """
-    def __init__(self, embed_dim):
+    def __init__(self, embed_dim:int):
         super().__init__()
         self.quickgelu = QuickGELU()
         self.mlp_projection = nn.Sequential(
@@ -186,7 +186,7 @@ class EncoderLayer(nn.Module):
         After residual2, x: (batch_size, tokens, embed_dim)
         Output, x: (batch_size, tokens, embed_dim)
     """
-    def __init__(self, embed_dim, heads):
+    def __init__(self, embed_dim:int, heads:int):
         super().__init__()
         self.layernorm1 = nn.LayerNorm(normalized_shape=embed_dim)
         self.self_attention = MultiHeadCausalSelfAttention(

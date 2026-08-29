@@ -2,7 +2,7 @@ import torch
 from torch import nn
 
 class ResNet(nn.Module):
-    def __init__(self, embed_dim, num_groups, in_channels, out_channels):
+    def __init__(self, in_channels:int, out_channels:int, num_groups:int=32):
         super().__init__()
         self.groupnorm1 = nn.GroupNorm(
             num_groups=num_groups, num_channels=in_channels
@@ -34,7 +34,7 @@ class ResNet(nn.Module):
 
 
 class MultiHeadSelfAttention(nn.Module):
-    def __init__(self, embed_dim, heads):
+    def __init__(self, embed_dim:int, heads:int):
         super().__init__()
         self.embed_dim = embed_dim
         self.heads = heads
@@ -58,39 +58,188 @@ class MultiHeadSelfAttention(nn.Module):
         return self.projection(attn_scores)
 
 class Downsample(nn.Module):
-    def __init__(self):
+    def __init__(self, channels:int, iteration:int):
         super().__init__()
-
+        self.out_channels = channels
+        if iteration == 1: self.out_channels * 2
+        if iteration == 2: self.out_channels * 4
+        self.downsampling_conv = nn.Conv2d(
+            in_channels=channels,
+            out_channels=self.out_channels,
+            kernel_size=(3,3),
+            stride=2,
+            padding=1
+        )
     def forward(self, x:torch.Tensor):
-        pass
+        x = self.downsampling_conv(x)
+        return x
 
 class Upsample(nn.Module):
-    def __init__(self):
+    def __init__(self, channels:int, iteration:int):
         super().__init__()
-
+        self.out_channels = channels
+        if iteration == 1: self.out_channels / 2
+        if iteration == 2: self.out_channels / 4
+        self.upsampling_conv = nn.ConvTranspose2d(
+            in_channels=channels,
+            out_channels=self.out_channels,
+            kernel_size=(3,3),
+            stride=2,
+            padding=1
+        )
     def forward(self, x:torch.Tensor):
-        pass
+        x = self.upsampling_conv(x)
+        return x
 
 class Encoder(nn.Module):
-    def __init__(self):
+    def __init__(self, embed_dim:int, heads:int, input_channels:int=128, output_channels:int=8, rgb_channels:int=3):
         super().__init__()
-
+        self.input_conv = nn.Conv2d(
+            in_channels=rgb_channels,
+            out_channels=input_channels,
+            kernel_size=(3,3),
+            stride=1,
+            padding=1
+        )
+        self.down_block1 = nn.ModuleList(
+            [
+                ResNet(in_channels=input_channels, out_channels=input_channels),
+                ResNet(in_channels=input_channels, out_channels=input_channels),
+                Downsample(channels=input_channels, iteration=1)
+            ]
+        )
+        self.down_block2 = nn.ModuleList(
+            [
+                ResNet(in_channels=input_channels*2, out_channels=input_channels*2),
+                ResNet(in_channels=input_channels*2, out_channels=input_channels*2),
+                Downsample(channels=input_channels, iteration=2)
+            ]
+        )
+        self.down_block3 = nn.ModuleList(
+            [
+                ResNet(in_channels=input_channels*4, out_channels=input_channels*4),
+                ResNet(in_channels=input_channels*4, out_channels=input_channels*4),
+                Downsample(channels=input_channels, iteration=3)
+            ]
+        )
+        self.down_block4 = nn.ModuleList(
+            [
+                ResNet(in_channels=input_channels*4, out_channels=input_channels*4),
+                ResNet(in_channels=input_channels*4, out_channels=input_channels*4),
+                MultiHeadSelfAttention(embed_dim=embed_dim, heads=heads),
+                MultiHeadSelfAttention(embed_dim=embed_dim, heads=heads)
+            ]
+        )
+        self.middle_block = nn.ModuleList(
+            [
+                ResNet(in_channels=input_channels*4, out_channels=input_channels*4),
+                MultiHeadSelfAttention(embed_dim=embed_dim, heads=heads),
+                ResNet(in_channels=input_channels*4, out_channels=input_channels*4)
+            ]
+        )
+        self.groupnorm = nn.GroupNorm(num_groups=embed_dim, num_channels=input_channels*4)
+        self.silu = nn.SiLU(inplace=True)
+        self.output_conv = nn.Conv2d(
+            in_channels=input_channels*4, out_channels=output_channels,
+            kernel_size=(3,3), stride=1, padding=1
+        )
+        self.latent_distribution = LatentDistribution()
     def forward(self, x:torch.Tensor):
-        pass
+        x = self.input_conv(x)
+        for block1 in self.down_block1:
+            x = block1(x)
+        for block2 in self.down_block2:
+            x = block2(x)
+        for block3 in self.down_block3:
+            x = block3(x)
+        for block4 in self.down_block4:
+            x = block4(x)
+        for block5 in self.middle_block:
+            x = block5(x)
+        x = self.groupnorm(x)
+        x = self.silu(x)
+        x = self.output_conv(x)
+        z = self.latent_distribution(x)
+        return z
+
 
 class Decoder(nn.Module):
-    def __init__(self):
+    def __init__(self, embed_dim:int, heads:int, rgb_channels:int=3, latent_channels:int=4, input_channels:int=512):
         super().__init__()
-
+        self.input_conv = nn.Conv2d(
+            in_channels=latent_channels, out_channels=input_channels,
+            kernel_size=(3,3), stride=1, padding=1
+        )
+        self.middle_block = nn.ModuleList(
+            [
+                ResNet(in_channels=input_channels, out_channels=input_channels),
+                MultiHeadSelfAttention(embed_dim=embed_dim, heads=heads),
+                ResNet(in_channels=input_channels, out_channels=input_channels)
+            ]
+        )
+        self.up_block1 = nn.ModuleList(
+            [
+                ResNet(in_channels=input_channels, out_channels=input_channels),
+                ResNet(in_channels=input_channels, out_channels=input_channels),
+                ResNet(in_channels=input_channels, out_channels=input_channels),
+                Upsample(channels=input_channels, iteration=1)
+            ]
+        )
+        self.up_block2 = nn.ModuleList(
+            [
+                ResNet(in_channels=input_channels/2, out_channels=input_channels/2),
+                ResNet(in_channels=input_channels/2, out_channels=input_channels/2),
+                ResNet(in_channels=input_channels/2, out_channels=input_channels/2),
+                Upsample(channels=input_channels, iteration=2)
+            ]
+        )
+        self.up_block3 = nn.ModuleList(
+            [
+                ResNet(in_channels=input_channels/4, out_channels=input_channels/4),
+                ResNet(in_channels=input_channels/4, out_channels=input_channels/4),
+                ResNet(in_channels=input_channels/4, out_channels=input_channels/4),
+                Upsample(channels=input_channels, iteration=3)
+            ]
+        )
+        self.up_block4 = nn.ModuleList(
+            [
+                ResNet(in_channels=input_channels/4, out_channels=input_channels/4),
+                ResNet(in_channels=input_channels/4, out_channels=input_channels/4),
+                ResNet(in_channels=input_channels/4, out_channels=input_channels/4)
+            ]
+        )
+        self.groupnorm = nn.GroupNorm(num_groups=embed_dim, num_channels=input_channels/4)
+        self.silu = nn.SiLU(inplace=True)
+        self.output_conv = nn.Conv2d(
+            in_channels=input_channels/4, out_channels=rgb_channels,
+            kernel_size=(3,3), stride=1, padding=1
+        )
     def forward(self, x:torch.Tensor):
-        pass
+        x = self.input_conv(x)
+        for block1 in self.up_block1:
+            x = block1(x)
+        for block2 in self.up_block2:
+            x = block2(x)
+        for block3 in self.up_block3:
+            x = block3(x)
+        for block4 in self.up_block4:
+            x = block4(x)
+        for block5 in self.middle_block:
+            x = block5(x)
+        x = self.groupnorm(x)
+        x = self.silu(x)
+        x = self.output_conv(x)
+        return x
 
 class LatentDistribution(nn.Module):
     def __init__(self):
         super().__init__()
 
     def forward(self, x:torch.Tensor):
-        pass
+        mean, log_variance = x.chunk(chunks=2, dim=1)
+        std = torch.matrix_exp(log_variance/2)
+        z = (x * std) + mean
+        return z
 
 class VAE(nn.Module):
     def __init__(self):
