@@ -13,13 +13,16 @@ class ResNet(nn.Module):
         self.silu1 = nn.SiLU()
         self.silu2 = nn.SiLU()
         self.conv1 = nn.Conv2d(
-            in_channels=in_channels, out_channels=out_channels
+            in_channels=in_channels, out_channels=out_channels,
+            kernel_size=(3,3), stride=1, padding=1
         )
         self.conv2 = nn.Conv2d(
-            in_channels=out_channels, out_channels=out_channels
+            in_channels=out_channels, out_channels=out_channels,
+            kernel_size=(3,3), stride=1, padding=1
         )
         self.residual_conv = nn.Conv2d(
-            in_channels=in_channels, out_channels=out_channels
+            in_channels=in_channels, out_channels=out_channels,
+            kernel_size=(1,1), padding=0, stride=1
         )
 
     def forward(self, x:torch.Tensor):
@@ -31,6 +34,7 @@ class ResNet(nn.Module):
         x = self.silu2(x)
         x = self.conv2(x)
         x = x + self.residual_conv(residual)
+        return x
 
 
 class MultiHeadSelfAttention(nn.Module):
@@ -58,14 +62,11 @@ class MultiHeadSelfAttention(nn.Module):
         return self.projection(attn_scores)
 
 class Downsample(nn.Module):
-    def __init__(self, channels:int, iteration:int):
+    def __init__(self, input_channels:int, output_channels:int):
         super().__init__()
-        self.out_channels = channels
-        if iteration == 1: self.out_channels * 2
-        if iteration == 2: self.out_channels * 4
         self.downsampling_conv = nn.Conv2d(
-            in_channels=channels,
-            out_channels=self.out_channels,
+            in_channels=input_channels,
+            out_channels=output_channels,
             kernel_size=(3,3),
             stride=2,
             padding=1
@@ -75,14 +76,11 @@ class Downsample(nn.Module):
         return x
 
 class Upsample(nn.Module):
-    def __init__(self, channels:int, iteration:int):
+    def __init__(self, input_channels:int, output_channels:int):
         super().__init__()
-        self.out_channels = channels
-        if iteration == 1: self.out_channels / 2
-        if iteration == 2: self.out_channels / 4
-        self.upsampling_conv = nn.ConvTranspose2d(
-            in_channels=channels,
-            out_channels=self.out_channels,
+        self.downsampling_conv = nn.ConvTranspose2d(
+            in_channels=input_channels,
+            out_channels=output_channels,
             kernel_size=(3,3),
             stride=2,
             padding=1
@@ -92,7 +90,7 @@ class Upsample(nn.Module):
         return x
 
 class Encoder(nn.Module):
-    def __init__(self, embed_dim:int, heads:int, input_channels:int=128, output_channels:int=8, rgb_channels:int=3):
+    def __init__(self, embed_dim:int=768, heads:int=12, input_channels:int=128, output_channels:int=8, rgb_channels:int=3):
         super().__init__()
         self.input_conv = nn.Conv2d(
             in_channels=rgb_channels,
@@ -164,7 +162,7 @@ class Encoder(nn.Module):
 
 
 class Decoder(nn.Module):
-    def __init__(self, embed_dim:int, heads:int, rgb_channels:int=3, latent_channels:int=4, input_channels:int=512):
+    def __init__(self, embed_dim:int=768, heads:int=64, rgb_channels:int=3, latent_channels:int=4, input_channels:int=512):
         super().__init__()
         self.input_conv = nn.Conv2d(
             in_channels=latent_channels, out_channels=input_channels,
@@ -216,16 +214,17 @@ class Decoder(nn.Module):
         )
     def forward(self, x:torch.Tensor):
         x = self.input_conv(x)
-        for block1 in self.up_block1:
+        for block1 in self.middle_block:
             x = block1(x)
-        for block2 in self.up_block2:
+        for block2 in self.up_block1:
             x = block2(x)
-        for block3 in self.up_block3:
+        for block3 in self.up_block2:
             x = block3(x)
-        for block4 in self.up_block4:
+        for block4 in self.up_block3:
             x = block4(x)
-        for block5 in self.middle_block:
+        for block5 in self.up_block4:
             x = block5(x)
+        
         x = self.groupnorm(x)
         x = self.silu(x)
         x = self.output_conv(x)
@@ -237,15 +236,23 @@ class LatentDistribution(nn.Module):
 
     def forward(self, x:torch.Tensor):
         mean, log_variance = x.chunk(chunks=2, dim=1)
-        std = torch.matrix_exp(log_variance/2)
+        std = torch.exp(log_variance/2)
         z = (x * std) + mean
         return z
 
 class VAE(nn.Module):
-    def __init__(self):
+    def __init__(self, encode:bool=False, decode:bool=False):
         super().__init__()
+        self.encode = encode
+        self.decode = decode
+        assert encode == decode, "Cannot encode and decode at once!"
+        self.encoder = Encoder()
+        self.decoder = Decoder()
 
     def forward(self, x:torch.Tensor):
-        pass
+        if self.encode: x = self.encoder(x)
+        elif self.decode: x = self.decoder(x)
+        return x
+
 
 
