@@ -1,0 +1,14 @@
+StableDiffusion:
+  CLIP:
+
+  UNET:
+
+  VAE:
+    embed_dim: 4
+    heads: 12
+    latent_channels: 4
+    rgb_channels: 3
+    encoder_input_channels: 128
+    encoder_output_channels: 8
+    decoder_input_channels: 512
+    

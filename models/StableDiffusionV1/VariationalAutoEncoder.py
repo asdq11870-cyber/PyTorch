@@ -2,7 +2,7 @@ import torch
 from torch import nn
 
 class ResNet(nn.Module):
-    def __init__(self, in_channels:int, out_channels:int, num_groups:int=32):
+    def __init__(self, in_channels:int, out_channels:int, num_groups:int):
         super().__init__()
         self.groupnorm1 = nn.GroupNorm(
             num_groups=num_groups, num_channels=in_channels
@@ -78,7 +78,7 @@ class Downsample(nn.Module):
 class Upsample(nn.Module):
     def __init__(self, input_channels:int, output_channels:int):
         super().__init__()
-        self.downsampling_conv = nn.ConvTranspose2d(
+        self.upsampling_conv = nn.ConvTranspose2d(
             in_channels=input_channels,
             out_channels=output_channels,
             kernel_size=(3,3),
@@ -90,8 +90,11 @@ class Upsample(nn.Module):
         return x
 
 class Encoder(nn.Module):
-    def __init__(self, embed_dim:int=768, heads:int=12, input_channels:int=128, output_channels:int=8, rgb_channels:int=3):
+    def __init__(self, embed_dim:int, heads:int, input_channels:int, output_channels:int, rgb_channels:int):
         super().__init__()
+        self.input_channels = input_channels
+        self.input_channelsx2 = input_channels * 2
+        self.input_channelsx4 = input_channels * 4
         self.input_conv = nn.Conv2d(
             in_channels=rgb_channels,
             out_channels=input_channels,
@@ -103,42 +106,40 @@ class Encoder(nn.Module):
             [
                 ResNet(in_channels=input_channels, out_channels=input_channels),
                 ResNet(in_channels=input_channels, out_channels=input_channels),
-                Downsample(channels=input_channels, iteration=1)
+                Downsample(input_channels=self.input_channels, output_channels=self.input_channelsx2)
             ]
         )
         self.down_block2 = nn.ModuleList(
             [
-                ResNet(in_channels=input_channels*2, out_channels=input_channels*2),
-                ResNet(in_channels=input_channels*2, out_channels=input_channels*2),
-                Downsample(channels=input_channels, iteration=2)
+                ResNet(in_channels=self.input_channelsx2, out_channels=self.input_channelsx2),
+                ResNet(in_channels=self.input_channelsx2, out_channels=self.input_channelsx2),
+                Downsample(input_channels=self.input_channelsx2, output_channels=self.input_channelsx4)
             ]
         )
         self.down_block3 = nn.ModuleList(
             [
-                ResNet(in_channels=input_channels*4, out_channels=input_channels*4),
-                ResNet(in_channels=input_channels*4, out_channels=input_channels*4),
-                Downsample(channels=input_channels, iteration=3)
+                ResNet(in_channels=self.input_channelsx4, out_channels=self.input_channelsx4),
+                ResNet(in_channels=self.input_channelsx4, out_channels=self.input_channelsx4),
+                Downsample(input_channels=self.input_channelsx4, output_channels=self.input_channelsx4)
             ]
         )
         self.down_block4 = nn.ModuleList(
             [
-                ResNet(in_channels=input_channels*4, out_channels=input_channels*4),
-                ResNet(in_channels=input_channels*4, out_channels=input_channels*4),
-                MultiHeadSelfAttention(embed_dim=embed_dim, heads=heads),
-                MultiHeadSelfAttention(embed_dim=embed_dim, heads=heads)
+                ResNet(in_channels=self.input_channelsx4, out_channels=self.input_channelsx4),
+                ResNet(in_channels=self.input_channelsx4, out_channels=self.input_channelsx4)
             ]
         )
         self.middle_block = nn.ModuleList(
             [
-                ResNet(in_channels=input_channels*4, out_channels=input_channels*4),
+                ResNet(in_channels=self.input_channelsx4, out_channels=self.input_channelsx4),
                 MultiHeadSelfAttention(embed_dim=embed_dim, heads=heads),
-                ResNet(in_channels=input_channels*4, out_channels=input_channels*4)
+                ResNet(in_channels=self.input_channelsx4, out_channels=self.input_channelsx4)
             ]
         )
-        self.groupnorm = nn.GroupNorm(num_groups=embed_dim, num_channels=input_channels*4)
+        self.groupnorm = nn.GroupNorm(num_groups=embed_dim, num_channels=self.input_channelsx4)
         self.silu = nn.SiLU(inplace=True)
         self.output_conv = nn.Conv2d(
-            in_channels=input_channels*4, out_channels=output_channels,
+            in_channels=self.input_channelsx4, out_channels=output_channels,
             kernel_size=(3,3), stride=1, padding=1
         )
         self.latent_distribution = LatentDistribution()
@@ -162,8 +163,11 @@ class Encoder(nn.Module):
 
 
 class Decoder(nn.Module):
-    def __init__(self, embed_dim:int=768, heads:int=64, rgb_channels:int=3, latent_channels:int=4, input_channels:int=512):
+    def __init__(self, embed_dim:int, heads:int, rgb_channels:int, latent_channels:int, input_channels:int):
         super().__init__()
+        self.input_channels = input_channels
+        self.input_channels_2 = input_channels // 2
+        self.input_channels_4 = input_channels // 4
         self.input_conv = nn.Conv2d(
             in_channels=latent_channels, out_channels=input_channels,
             kernel_size=(3,3), stride=1, padding=1
@@ -180,36 +184,36 @@ class Decoder(nn.Module):
                 ResNet(in_channels=input_channels, out_channels=input_channels),
                 ResNet(in_channels=input_channels, out_channels=input_channels),
                 ResNet(in_channels=input_channels, out_channels=input_channels),
-                Upsample(channels=input_channels, iteration=1)
+                Upsample(input_channels=input_channels, output_channels=self.input_channels_2)
             ]
         )
         self.up_block2 = nn.ModuleList(
             [
-                ResNet(in_channels=input_channels/2, out_channels=input_channels/2),
-                ResNet(in_channels=input_channels/2, out_channels=input_channels/2),
-                ResNet(in_channels=input_channels/2, out_channels=input_channels/2),
-                Upsample(channels=input_channels, iteration=2)
+                ResNet(in_channels=self.input_channels_2, out_channels=self.input_channels_2),
+                ResNet(in_channels=self.input_channels_2, out_channels=self.input_channels_2),
+                ResNet(in_channels=self.input_channels_2, out_channels=self.input_channels_2),
+                Upsample(input_channels=self.input_channels_2, output_channels=self.input_channels_4)            
             ]
         )
         self.up_block3 = nn.ModuleList(
             [
-                ResNet(in_channels=input_channels/4, out_channels=input_channels/4),
-                ResNet(in_channels=input_channels/4, out_channels=input_channels/4),
-                ResNet(in_channels=input_channels/4, out_channels=input_channels/4),
-                Upsample(channels=input_channels, iteration=3)
+                ResNet(in_channels=self.input_channels_4, out_channels=self.input_channels_4),
+                ResNet(in_channels=self.input_channels_4, out_channels=self.input_channels_4),
+                ResNet(in_channels=self.input_channels_4, out_channels=self.input_channels_4),
+                Upsample(input_channels=self.input_channels_4, output_channels=self.input_channels_4)
             ]
         )
         self.up_block4 = nn.ModuleList(
             [
-                ResNet(in_channels=input_channels/4, out_channels=input_channels/4),
-                ResNet(in_channels=input_channels/4, out_channels=input_channels/4),
-                ResNet(in_channels=input_channels/4, out_channels=input_channels/4)
+                ResNet(in_channels=self.input_channels_4, out_channels=self.input_channels_4),
+                ResNet(in_channels=self.input_channels_4, out_channels=self.input_channels_4),
+                ResNet(in_channels=self.input_channels_4, out_channels=self.input_channels_4)
             ]
         )
-        self.groupnorm = nn.GroupNorm(num_groups=embed_dim, num_channels=input_channels/4)
+        self.groupnorm = nn.GroupNorm(num_groups=embed_dim, num_channels=self.input_channels_4)
         self.silu = nn.SiLU(inplace=True)
         self.output_conv = nn.Conv2d(
-            in_channels=input_channels/4, out_channels=rgb_channels,
+            in_channels=self.input_channels_4, out_channels=rgb_channels,
             kernel_size=(3,3), stride=1, padding=1
         )
     def forward(self, x:torch.Tensor):
@@ -235,17 +239,19 @@ class LatentDistribution(nn.Module):
         super().__init__()
 
     def forward(self, x:torch.Tensor):
+        noise = torch.randn(x.shape)
         mean, log_variance = x.chunk(chunks=2, dim=1)
         std = torch.exp(log_variance/2)
-        z = (x * std) + mean
+        z = (noise * std) + mean
         return z
 
 class VAE(nn.Module):
-    def __init__(self, encode:bool=False, decode:bool=False):
+    def __init__(self, encode:bool, decode:bool):
         super().__init__()
         self.encode = encode
         self.decode = decode
-        assert encode == decode, "Cannot encode and decode at once!"
+        assert encode == False and decode == False, "Encode and Decode cannot both be false!"
+        assert encode == True and decode == True, "Encode and Decode cannot both be false!"
         self.encoder = Encoder()
         self.decoder = Decoder()
 
