@@ -4,8 +4,6 @@ from models.StableDiffusionV1.CLIPTransformer import CLIPTransformer
 from transformers import CLIPTokenizer
 import yaml
 
-
-
 with open("Parameters.yaml","r") as f:
     config = yaml.safe_load(f)["UNET"]
 
@@ -181,29 +179,35 @@ class MultiHeadSelfAttentionBlock(nn.Module):
         return self.projection(attn_scores)
 
 class MultiHeadCrossAttentionBlock(nn.Module):
-    def __init__(self, embed_dim:int, heads:int):
+    def __init__(self, embed_dim:int, heads:int, channels:int, max_seq_len:int):
         super().__init__()
-        assert embed_dim % heads == 0, "Embedding dimension must be divisible by number of heads"
-        self.head_dim = embed_dim // heads
+        assert channels % heads == 0, "Embedding dimension must be divisible by number of heads"
+        self.head_dim = channels // heads
+        self.heads = heads
+        self.max_seq_len = max_seq_len
+        self.q_projection = nn.Linear(in_features=channels, out_features=channels)
+        self.k_projection = nn.Linear(in_features=embed_dim, out_features=channels)
+        self.v_projection = nn.Linear(in_features=embed_dim, out_features=channels)
+        self.out_projection = nn.Conv2d(
+            in_channels=channels, out_channels=channels,
+            kernel_size=(1,1), stride=1, padding=0
+        )
 
     def forward(self, x:torch.Tensor, context:torch.Tensor):
         batch, channels, height, width = x.shape
-        query = x.permute(0,2,3,1).flatten(start_dim=1, end_dim=2)
-        key = context
-        value = context
+        query = x.flatten(start_dim=2, end_dim=3).reshape(batch, self.heads, self.head_dim, height*width).permute(0,1,3,2)
+        key = self.k_projection(context)
+        key = key.reshape(batch, self.max_seq_len, self.heads, self.head_dim).permute(0,2,1,3)
+        value = self.v_projection(context)
+        value = value.reshape(batch, self.max_seq_len, self.heads, self.head_dim).permute(0,2,1,3)
 
         attn_scores = query @ key.transpose(-1,-2)
         attn_scores = attn_scores / (self.head_dim ** 0.5)
         attn_scores = torch.softmax(attn_scores, dim=-1) @ value
+        attn_output = attn_scores.transpose(2,3).reshape(batch, channels, height, width)
+        return self.out_projection(attn_output)
         
 class DownBlock(nn.Module):
-    def __init__(self):
-        super().__init__()
-
-    def forward(self, x:torch.Tensor):
-        pass
-
-class UpBlock(nn.Module):
     def __init__(self):
         super().__init__()
 
@@ -217,10 +221,20 @@ class MidBlock(nn.Module):
     def forward(self, x:torch.Tensor):
         pass
 
+class UpBlock(nn.Module):
+    def __init__(self):
+        super().__init__()
+
+    def forward(self, x:torch.Tensor):
+        pass
+
 class UNET(nn.Module):
     def __init__(self):
         super().__init__()
         tokenizer = CLIPTokenizer.from_pretrained("openai/clip-vit-large-patch14")
 
     def forward(self, x:torch.Tensor):
+        pass
+
+    def load_pretrained(self):
         pass
