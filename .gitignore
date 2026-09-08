@@ -3,3 +3,6 @@
 
 # VENV ENVIRONMENT
 .venv/
+
+# Investigative folders
+/storing_files

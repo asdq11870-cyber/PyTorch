@@ -217,14 +217,15 @@ class CLIPTransformer(nn.Module):
     The complete CLIP text encoder used to convert a sequence
     of token IDs into contextualized text representations for Stable Diffusion.
 
-		The input token IDs are first converted into token and positional embeddings.
+	The input token IDs are first converted into token and positional embeddings.
     These embeddings are then passed sequentially through multiple CLIP Transformer
     encoder layers, allowing each token to incorporate contextual information from 
     the surrounding text while respecting the causal attention mask. A final LayerNorm
     is applied to the resulting representations and the normalised shape is configured
-    to the embedding dimension.
+    to the embedding dimension. The load_pretrained function is used for loading the weights
+    from OpenAI's CLIPTextModel used in the StableDiffusionV1.
 
-		The output contains a contextualized embedding for every token in the input sequence.
+	The output contains a contextualized embedding for every token in the input sequence.
     These representations are subsequently used by the Stable Diffusion U-Net as text 
     conditioning through cross-attention.
 
@@ -245,10 +246,11 @@ class CLIPTransformer(nn.Module):
         After layernorm, x: (batch_size, tokens, embed_dim)
         Output, x: (batch_size, tokens, embed_dim)
     """
-    def __init__(self,vocab_size:int, max_seq_len:int,
+    def __init__(self,vocab_size:int=config["vocab_size"], max_seq_len:int=config["max_seq_len"],
                 embed_dim:int=config["embed_dim"], heads:int=config["heads"],
                 num_encoder_layers:int=config["num_encoder_layers"]):
         super().__init__()
+        self.num_encoder_layers = num_encoder_layers
         self.embedding = Embedding(
             embed_dim=embed_dim, vocab_size=vocab_size, max_seq_len=max_seq_len
         )
@@ -266,3 +268,56 @@ class CLIPTransformer(nn.Module):
             x = block(x)
         x = self.layernorm(x)
         return x
+
+    def load_pretrained(self):
+        from transformers import CLIPTextModel
+        clip = CLIPTextModel.from_pretrained("openai/clip-vit-large-patch14")
+        with torch.no_grad():
+            self.embedding.token_embedding.weight.copy_(
+                clip.embeddings.token_embedding.weight
+            )
+            self.embedding.positional_embedding.weight.copy_(
+                clip.embeddings.position_embedding.weight
+            )
+            for i in range(self.num_encoder_layers):
+                self.encoder_layers[i].layernorm1.weight.copy_(
+                    clip.encoder.layers[i].layer_norm1.weight
+                )
+                self.encoder_layers[i].layernorm1.bias.copy_(
+                    clip.encoder.layers[i].layer_norm1.bias
+                )
+                self.encoder_layers[i].self_attention.qkv.weight.copy_(
+                    torch.cat([clip.encoder.layers[i].self_attn.q_proj.weight, 
+                    clip.encoder.layers[i].self_attn.k_proj.weight,
+                    clip.encoder.layers[i].self_attn.k_proj.weight],dim=0)    
+                )
+                self.encoder_layers[i].self_attention.qkv.bias.copy_(
+                    torch.cat([clip.encoder.layers[i].self_attn.q_proj.bias, 
+                    clip.encoder.layers[i].self_attn.k_proj.bias,
+                    clip.encoder.layers[i].self_attn.k_proj.bias],dim=0)    
+                )
+                self.encoder_layers[i].layernorm2.weight.copy_(
+                    clip.encoder.layers[i].layer_norm2.weight
+                )
+                self.encoder_layers[i].layernorm2.bias.copy_(
+                    clip.encoder.layers[i].layer_norm2.bias
+                )
+                self.encoder_layers[i].mlp.mlp_projection[0].weight.copy_(
+                    clip.encoder.layers[i].mlp.fc1.weight
+                )
+                self.encoder_layers[i].mlp.mlp_projection[0].bias.copy_(
+                    clip.encoder.layers[i].mlp.fc1.bias
+                )
+                self.encoder_layers[i].mlp.mlp_projection[2].weight.copy_(
+                    clip.encoder.layers[i].mlp.fc2.weight
+                )
+                self.encoder_layers[i].mlp.mlp_projection[2].bias.copy_(
+                    clip.encoder.layers[i].mlp.fc2.bias
+                )
+            self.layernorm.weight.copy_(
+                clip.final_layer_norm.weight
+            )
+            self.layernorm.bias.copy_(
+                clip.final_layer_norm.bias
+            )
+

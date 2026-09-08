@@ -196,8 +196,6 @@ class MultiHeadCrossAttentionBlock(nn.Module):
         attn_scores = attn_scores / (self.head_dim ** 0.5)
         attn_scores = torch.softmax(attn_scores, dim=-1) @ value
         
-
-
 class DownBlock(nn.Module):
     def __init__(self):
         super().__init__()
@@ -222,6 +220,7 @@ class MidBlock(nn.Module):
 class UNET(nn.Module):
     def __init__(self):
         super().__init__()
+        tokenizer = CLIPTokenizer.from_pretrained("openai/clip-vit-large-patch14")
 
     def forward(self, x:torch.Tensor):
         pass

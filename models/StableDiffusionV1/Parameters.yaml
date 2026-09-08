@@ -3,6 +3,8 @@ StableDiffusion:
   CLIP:
     embed_dim: 768
     heads: 12
+    vocab_size: 49408
+    max_seq_len: 77
     mlp_expansion: 4
     num_encoder_layers: 12
 

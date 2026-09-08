@@ -6,6 +6,8 @@ with open("Parameters.yaml", "r") as f:
     config = yaml.safe_load(f)["VAE"]
 
 class ResNet(nn.Module):
+    """
+    """
     def __init__(self, in_channels:int, out_channels:int, num_groups:int):
         super().__init__()
         self.groupnorm1 = nn.GroupNorm(
@@ -42,6 +44,8 @@ class ResNet(nn.Module):
 
 
 class SelfAttention(nn.Module):
+    """
+    """
     def __init__(self, num_groups:int, channels:int):
         super().__init__()
         self.groupnorm = nn.GroupNorm(num_groups=num_groups, num_channels=channels, eps=1e-6)
@@ -93,6 +97,8 @@ class SelfAttention(nn.Module):
 
 
 class Downsample(nn.Module):
+    """
+    """
     def __init__(self, input_channels:int, output_channels:int):
         super().__init__()
         self.downsampling_conv = nn.Conv2d(
@@ -107,6 +113,8 @@ class Downsample(nn.Module):
         return x
 
 class Upsample(nn.Module):
+    """
+    """
     def __init__(self, input_channels:int, output_channels:int, scale_factor:int=config["upsample_scale_factor"]):
         super().__init__()
         self.upsample = nn.Upsample(scale_factor=scale_factor, mode="nearest")
@@ -123,6 +131,8 @@ class Upsample(nn.Module):
         return x
 
 class Encoder(nn.Module):
+    """
+    """
     def __init__(self, embed_dim:int, input_channels:int, output_channels:int, rgb_channels:int, num_groups:int):
         super().__init__()
         self.input_channels = input_channels
@@ -201,6 +211,8 @@ class Encoder(nn.Module):
 
 
 class Decoder(nn.Module):
+    """
+    """
     def __init__(self, embed_dim:int, rgb_channels:int, latent_channels:int, input_channels:int, num_groups:int):
         super().__init__()
         self.input_channels = input_channels
@@ -277,6 +289,8 @@ class Decoder(nn.Module):
         return x
 
 class LatentDistribution(nn.Module):
+    """
+    """
     def __init__(self):
         super().__init__()
 
@@ -289,6 +303,8 @@ class LatentDistribution(nn.Module):
         return z
 
 class VAE(nn.Module):
+    """
+    """
     def __init__(self, encode:bool, decode:bool):
         super().__init__()
         self.encode = encode
@@ -316,6 +332,17 @@ class VAE(nn.Module):
         if self.encode: x = self.encoder(x)
         elif self.decode: x = self.decoder(x)
         return x
+
+    def load_pretrained(self):
+        from diffusers import AutoencoderKL
+        vae = AutoencoderKL.from_pretrained("stabilityai/sd-vae-ft-mse")
+        self.encoder.input_conv.weight.copy_(
+            vae.encoder.conv_in.weight
+        )
+        self.encoder.input_conv.bias.copy_(
+            vae.encoder.conv_in.bias
+        )
+        
 
 
 
