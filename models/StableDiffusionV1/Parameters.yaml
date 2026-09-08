@@ -1,14 +1,24 @@
 StableDiffusion:
+
   CLIP:
+    embed_dim: 768
+    heads: 12
+    mlp_expansion: 4
+    num_encoder_layers: 12
 
   UNET:
+    embed_dim: 768
+    heads: 12
+    upsample_scale_factor: 2
 
   VAE:
-    embed_dim: 4
-    heads: 12
+    num_groups: 32
     latent_channels: 4
-    rgb_channels: 3
+    rgb_channels: &anchor 3
     encoder_input_channels: 128
     encoder_output_channels: 8
     decoder_input_channels: 512
+    decoder_output_channels: *anchor
+    upsample_scale_factor: 2
+
     

@@ -1,6 +1,5 @@
 import torch
 from torch import nn
-from models.StableDiffusionV1.CLIPTransformer import CLIPTransformer
 from models.StableDiffusionV1.VariationalAutoEncoder import VAE
 from models.StableDiffusionV1.UNET import UNET
 

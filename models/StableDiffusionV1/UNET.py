@@ -1,5 +1,13 @@
 import torch
 from torch import nn
+from models.StableDiffusionV1.CLIPTransformer import CLIPTransformer
+from transformers import CLIPTokenizer
+import yaml
+
+
+
+with open("Parameters.yaml","r") as f:
+    config = yaml.safe_load(f)["UNET"]
 
 class TimestepEmbedding(nn.Module):
     """
@@ -123,25 +131,72 @@ class ResNet(nn.Module):
         return x
         
 class Downsample(nn.Module):
-    def __init__(self):
+    def __init__(self, input_channels, output_channels):
         super().__init__()
+        self.downsampling_conv = nn.Conv2d(
+            in_channels=input_channels, out_channels=output_channels,
+            kernel_size=(3,3), stride=2, padding=1
+        )
 
     def forward(self, x:torch.Tensor):
-        pass
+        x = self.downsampling_conv(x)
+        return x
 
 class Upsample(nn.Module):
-    def __init__(self):
+    def __init__(self, input_channels:int, output_channels:int, scale_factor:int):
         super().__init__()
+        self.upsample = nn.Upsample(scale_factor=scale_factor, mode="nearest")
+        self.upsampling_conv = nn.Conv2d(
+            in_channels=input_channels, out_channels=output_channels,
+            kernel_size=(3,3), stride=1, padding=0
+        )
 
     def forward(self, x:torch.Tensor):
-        pass
+        x = self.upsample(x)
+        x = self.upsampling_conv(x)
+        return x
 
-class SelfAttentionBlock(nn.Module):
-    def __init__(self):
+class MultiHeadSelfAttentionBlock(nn.Module):
+    def __init__(self, embed_dim:int, heads:int):
         super().__init__()
+        assert embed_dim % heads == 0, "Embedding dimension must be divisible by number of heads"
+        self.head_dim = embed_dim // heads
+        self.qkv_projection = nn.Linear(in_features=embed_dim, out_features=embed_dim * 3)
+        self.projection = nn.Linear(in_features=embed_dim, out_features=embed_dim)
+        self.embed_dim = embed_dim
+        self.heads = heads
 
     def forward(self, x:torch.Tensor):
-        pass
+        batch, tokens, _ = x.shape
+        qkv = self.qkv_projection(x)
+        query, key, value = qkv.chunk(3, dim=-1)
+
+        query = query.reshape(batch, tokens, self.heads, self.head_dim).permute(0,2,1,3)
+        key = key.reshape(batch, tokens, self.heads, self.head_dim).permute(0,2,1,3)
+        value = value.reshape(batch, tokens, self.heads, self.head_dim).permute(0,2,1,3)
+
+        attn_scores = query @ key.transpose(-1,-2)
+        attn_scores = attn_scores / (self.head_dim ** 0.5)
+        attn_scores = torch.softmax(attn_scores, dim=-1) @ value
+        return self.projection(attn_scores)
+
+class MultiHeadCrossAttentionBlock(nn.Module):
+    def __init__(self, embed_dim:int, heads:int):
+        super().__init__()
+        assert embed_dim % heads == 0, "Embedding dimension must be divisible by number of heads"
+        self.head_dim = embed_dim // heads
+
+    def forward(self, x:torch.Tensor, context:torch.Tensor):
+        batch, channels, height, width = x.shape
+        query = x.permute(0,2,3,1).flatten(start_dim=1, end_dim=2)
+        key = context
+        value = context
+
+        attn_scores = query @ key.transpose(-1,-2)
+        attn_scores = attn_scores / (self.head_dim ** 0.5)
+        attn_scores = torch.softmax(attn_scores, dim=-1) @ value
+        
+
 
 class DownBlock(nn.Module):
     def __init__(self):
@@ -158,13 +213,6 @@ class UpBlock(nn.Module):
         pass
 
 class MidBlock(nn.Module):
-    def __init__(self):
-        super().__init__()
-
-    def forward(self, x:torch.Tensor):
-        pass
-
-class CrossAttentionBlock(nn.Module):
     def __init__(self):
         super().__init__()
 

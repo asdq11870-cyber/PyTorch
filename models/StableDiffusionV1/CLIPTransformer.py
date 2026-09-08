@@ -1,6 +1,10 @@
 # Text Conditioning Class used in StableDiffusionV1
 import torch
 from torch import nn
+import yaml
+
+with open("Parameters.yaml","r") as f:
+    config = yaml.safe_load(f)["CLIP"]
 
 class Embedding(nn.Module):
     """
@@ -144,13 +148,13 @@ class FeedForward(nn.Module):
         After 2nd linear projection: (batch_size, tokens, self.embed_dim)
         x: (batch_size, tokens, self.embed_dim)
     """
-    def __init__(self, embed_dim:int):
+    def __init__(self, embed_dim:int, mlp_expansion:int=config["mlp_expansion"]):
         super().__init__()
         self.quickgelu = QuickGELU()
         self.mlp_projection = nn.Sequential(
-            nn.Linear(in_features=embed_dim, out_features=embed_dim * 4),
+            nn.Linear(in_features=embed_dim, out_features=embed_dim * mlp_expansion),
             self.quickgelu,
-            nn.Linear(in_features=embed_dim * 4, out_features=embed_dim)
+            nn.Linear(in_features=embed_dim * mlp_expansion, out_features=embed_dim)
         )
 
     def forward(self, x:torch.Tensor):
@@ -241,7 +245,9 @@ class CLIPTransformer(nn.Module):
         After layernorm, x: (batch_size, tokens, embed_dim)
         Output, x: (batch_size, tokens, embed_dim)
     """
-    def __init__(self, embed_dim, heads, vocab_size, max_seq_len, num_encoder_layers):
+    def __init__(self,vocab_size:int, max_seq_len:int,
+                embed_dim:int=config["embed_dim"], heads:int=config["heads"],
+                num_encoder_layers:int=config["num_encoder_layers"]):
         super().__init__()
         self.embedding = Embedding(
             embed_dim=embed_dim, vocab_size=vocab_size, max_seq_len=max_seq_len
