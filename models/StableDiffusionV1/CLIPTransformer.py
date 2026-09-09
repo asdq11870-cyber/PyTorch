@@ -1,6 +1,7 @@
 # Text Conditioning Class used in StableDiffusionV1
 import torch
 from torch import nn
+from transformers import CLIPTextModel
 import yaml
 
 with open("Parameters.yaml","r") as f:
@@ -270,7 +271,6 @@ class CLIPTransformer(nn.Module):
         return x
 
     def load_pretrained(self):
-        from transformers import CLIPTextModel
         clip = CLIPTextModel.from_pretrained("openai/clip-vit-large-patch14")
         with torch.no_grad():
             self.embedding.token_embedding.weight.copy_(

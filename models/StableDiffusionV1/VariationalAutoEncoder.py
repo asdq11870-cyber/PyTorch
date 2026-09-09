@@ -1,6 +1,7 @@
 import torch
 from torch import nn
 import yaml
+from diffusers import AutoencoderKL
 
 with open("Parameters.yaml", "r") as f:
     config = yaml.safe_load(f)["VAE"]
@@ -341,164 +342,164 @@ class VAE(nn.Module):
         return x
 
     def load_pretrained(self):
-        from diffusers import AutoencoderKL
         vae = AutoencoderKL.from_pretrained("stabilityai/sd-vae-ft-mse")
-        # ---------------------------------------------------------------------------------
-        # ---------------------------------------------------------------------------------
-        self.encoder.input_conv.weight.copy_(
-            vae.encoder.conv_in.weight
-        )
-        self.encoder.input_conv.bias.copy_(
-            vae.encoder.conv_in.bias
-        )
-        # ---------------------------------------------------------------------------------
-        # ---------------------------------------------------------------------------------
-        self.encoder.down_block1[0].copy_(
-            vae.encoder.down_blocks[0].resnets[0]
-        )
-        self.encoder.down_block1[1].copy_(
-            vae.encoder.down_blocks[0].resnets[1]
-        )
-        self.encoder.down_block1[2].copy_(
-            vae.encoder.down_blocks[0].downsamplers[0]
-        )
-        self.encoder.down_block2[0].copy_(
-            vae.encoder.down_blocks[1].resnets[0]
-        )
-        self.encoder.down_block2[1].copy_(
-            vae.encoder.down_blocks[1].resnets[1]
-        )
-        self.encoder.down_block2[2].copy_(
-            vae.encoder.down_blocks[1].downsamplers[0]
-        )
-        self.encoder.down_block3[0].copy_(
-            vae.encoder.down_blocks[2].resnets[0]
-        )
-        self.encoder.down_block3[1].copy_(
-            vae.encoder.down_blocks[2].resnets[1]
-        )
-        self.encoder.down_block3[2].copy_(
-            vae.encoder.down_blocks[2].downsamplers[0]
-        )
-        self.encoder.down_block4[0].copy_(
-            vae.encoder.down_blocks[3].resnets[0]
-        )
-        self.encoder.down_block4[1].copy_(
-            vae.encoder.down_blocks[3].resnets[1]
-        )
-        self.encoder.middle_block[0].copy_(
-            vae.encoder.mid_block.resnets[0]
-        )
-        self.encoder.middle_block[1].copy_(
-            vae.encoder.mid_block.attentions[0]
-        )
-        self.encoder.middle_block[2].copy_(
-            vae.encoder.mid_block.resnets[1]
-        )
-        # ---------------------------------------------------------------------------------
-        # ---------------------------------------------------------------------------------
-        self.encoder.groupnorm.weight.copy_(
-            vae.encoder.conv_norm_out.weight
-        )
-        self.encoder.groupnorm.bias.copy_(
-            vae.encoder.conv_norm_out.bias
-        )
-        self.encoder.proj_conv.weight.copy_(
-            vae.encoder.conv_out.weight
-        )
-        self.encoder.proj_conv.bias.copy_(
-            vae.encoder.conv_out.bias
-        )
-        self.encoder.quant_conv.weight.copy_(
-            vae.quant_conv.weight
-        )
-        self.encoder.quant_conv.bias.copy_(
-            vae.quant_conv.bias
-        )
-        # ---------------------------------------------------------------------------------
-        # ---------------------------------------------------------------------------------
-        # ---------------------------------------------------------------------------------
-        # ---------------------------------------------------------------------------------
-        self.decoder.post_quant_conv.weight.copy_(
-            vae.post_quant_conv.weight
-        )
-        self.decoder.post_quant_conv.bias.copy_(
-            vae.post_quant_conv.bias
-        )
-        self.decoder.proj_conv.weight.copy_(
-            vae.decoder.conv_in.weight
-        )
-        self.decoder.proj_conv.bias.copy_(
-            vae.decoder.conv_in.bias
-        )
-        # ---------------------------------------------------------------------------------
-        # ---------------------------------------------------------------------------------
-        self.decoder.middle_block[0].copy_(
-            vae.decoder.mid_block.resnets[0]
-        )
-        self.decoder.middle_block[1].copy_(
-            vae.decoder.mid_block.attentions[0]
-        )
-        self.decoder.middle_block[2].copy_(
-            vae.decoder.mid_block.resnets[1]
-        )
-        self.decoder.up_block1[0].copy_(
-            vae.decoder.up_blocks[0].resnets[0]
-        )
-        self.decoder.up_block1[1].copy_(
-            vae.decoder.up_blocks[0].resnets[1]
-        )
-        self.decoder.up_block1[2].copy_(
-            vae.decoder.up_blocks[0].resnets[2]
-        )
-        self.decoder.up_block1[3].copy_(
-            vae.decoder.up_blocks[0].upsamplers[0]
-        )
-        self.decoder.up_block2[0].copy_(
-            vae.decoder.up_blocks[1].resnets[0]
-        )
-        self.decoder.up_block2[1].copy_(
-            vae.decoder.up_blocks[1].resnets[1]
-        )
-        self.decoder.up_block2[2].copy_(
-            vae.decoder.up_blocks[1].resnets[2]
-        )
-        self.decoder.up_block2[3].copy_(
-            vae.decoder.up_blocks[1].upsamplers[0]
-        )
-        self.decoder.up_block3[0].copy_(
-            vae.decoder.up_blocks[2].resnets[0]
-        )
-        self.decoder.up_block3[1].copy_(
-            vae.decoder.up_blocks[2].resnets[1]
-        )
-        self.decoder.up_block3[2].copy_(
-            vae.decoder.up_blocks[2].resnets[2]
-        )
-        self.decoder.up_block3[3].copy_(
-            vae.decoder.up_blocks[2].upsamplers[0]
-        )
-        self.decoder.up_block4[0].copy_(
-            vae.decoder.up_blocks[3].resnets[0]
-        )
-        self.decoder.up_block4[1].copy_(
-            vae.decoder.up_blocks[3].resnets[1]
-        )
-        self.decoder.up_block4[2].copy_(
-            vae.decoder.up_blocks[3].resnets[2]
-        )
-        # ---------------------------------------------------------------------------------
-        # ---------------------------------------------------------------------------------
-        self.decoder.groupnorm.weight.copy_(
-            vae.decoder.conv_norm_out.weight
-        )
-        self.decoder.groupnorm.bias.copy_(
-            vae.decoder.conv_norm_out.bias
-        )
-        self.decoder.output_conv.weight.copy_(
-            vae.decoder.conv_out.weight
-        )
-        self.decoder.output_conv.bias.copy_(
-            vae.decoder.conv_out.bias
-        )
+        with torch.no_grad():
+            # ---------------------------------------------------------------------------------
+            # ---------------------------------------------------------------------------------
+            self.encoder.input_conv.weight.copy_(
+                vae.encoder.conv_in.weight
+            )
+            self.encoder.input_conv.bias.copy_(
+                vae.encoder.conv_in.bias
+            )
+            # ---------------------------------------------------------------------------------
+            # ---------------------------------------------------------------------------------
+            self.encoder.down_block1[0].copy_(
+                vae.encoder.down_blocks[0].resnets[0]
+            )
+            self.encoder.down_block1[1].copy_(
+                vae.encoder.down_blocks[0].resnets[1]
+            )
+            self.encoder.down_block1[2].copy_(
+                vae.encoder.down_blocks[0].downsamplers[0]
+            )
+            self.encoder.down_block2[0].copy_(
+                vae.encoder.down_blocks[1].resnets[0]
+            )
+            self.encoder.down_block2[1].copy_(
+                vae.encoder.down_blocks[1].resnets[1]
+            )
+            self.encoder.down_block2[2].copy_(
+                vae.encoder.down_blocks[1].downsamplers[0]
+            )
+            self.encoder.down_block3[0].copy_(
+                vae.encoder.down_blocks[2].resnets[0]
+            )
+            self.encoder.down_block3[1].copy_(
+                vae.encoder.down_blocks[2].resnets[1]
+            )
+            self.encoder.down_block3[2].copy_(
+                vae.encoder.down_blocks[2].downsamplers[0]
+            )
+            self.encoder.down_block4[0].copy_(
+                vae.encoder.down_blocks[3].resnets[0]
+            )
+            self.encoder.down_block4[1].copy_(
+                vae.encoder.down_blocks[3].resnets[1]
+            )
+            self.encoder.middle_block[0].copy_(
+                vae.encoder.mid_block.resnets[0]
+            )
+            self.encoder.middle_block[1].copy_(
+                vae.encoder.mid_block.attentions[0]
+            )
+            self.encoder.middle_block[2].copy_(
+                vae.encoder.mid_block.resnets[1]
+            )
+            # ---------------------------------------------------------------------------------
+            # ---------------------------------------------------------------------------------
+            self.encoder.groupnorm.weight.copy_(
+                vae.encoder.conv_norm_out.weight
+            )
+            self.encoder.groupnorm.bias.copy_(
+                vae.encoder.conv_norm_out.bias
+            )
+            self.encoder.proj_conv.weight.copy_(
+                vae.encoder.conv_out.weight
+            )
+            self.encoder.proj_conv.bias.copy_(
+                vae.encoder.conv_out.bias
+            )
+            self.encoder.quant_conv.weight.copy_(
+                vae.quant_conv.weight
+            )
+            self.encoder.quant_conv.bias.copy_(
+                vae.quant_conv.bias
+            )
+            # ---------------------------------------------------------------------------------
+            # ---------------------------------------------------------------------------------
+            # ---------------------------------------------------------------------------------
+            # ---------------------------------------------------------------------------------
+            self.decoder.post_quant_conv.weight.copy_(
+                vae.post_quant_conv.weight
+            )
+            self.decoder.post_quant_conv.bias.copy_(
+                vae.post_quant_conv.bias
+            )
+            self.decoder.proj_conv.weight.copy_(
+                vae.decoder.conv_in.weight
+            )
+            self.decoder.proj_conv.bias.copy_(
+                vae.decoder.conv_in.bias
+            )
+            # ---------------------------------------------------------------------------------
+            # ---------------------------------------------------------------------------------
+            self.decoder.middle_block[0].copy_(
+                vae.decoder.mid_block.resnets[0]
+            )
+            self.decoder.middle_block[1].copy_(
+                vae.decoder.mid_block.attentions[0]
+            )
+            self.decoder.middle_block[2].copy_(
+                vae.decoder.mid_block.resnets[1]
+            )
+            self.decoder.up_block1[0].copy_(
+                vae.decoder.up_blocks[0].resnets[0]
+            )
+            self.decoder.up_block1[1].copy_(
+                vae.decoder.up_blocks[0].resnets[1]
+            )
+            self.decoder.up_block1[2].copy_(
+                vae.decoder.up_blocks[0].resnets[2]
+            )
+            self.decoder.up_block1[3].copy_(
+                vae.decoder.up_blocks[0].upsamplers[0]
+            )
+            self.decoder.up_block2[0].copy_(
+                vae.decoder.up_blocks[1].resnets[0]
+            )
+            self.decoder.up_block2[1].copy_(
+                vae.decoder.up_blocks[1].resnets[1]
+            )
+            self.decoder.up_block2[2].copy_(
+                vae.decoder.up_blocks[1].resnets[2]
+            )
+            self.decoder.up_block2[3].copy_(
+                vae.decoder.up_blocks[1].upsamplers[0]
+            )
+            self.decoder.up_block3[0].copy_(
+                vae.decoder.up_blocks[2].resnets[0]
+            )
+            self.decoder.up_block3[1].copy_(
+                vae.decoder.up_blocks[2].resnets[1]
+            )
+            self.decoder.up_block3[2].copy_(
+                vae.decoder.up_blocks[2].resnets[2]
+            )
+            self.decoder.up_block3[3].copy_(
+                vae.decoder.up_blocks[2].upsamplers[0]
+            )
+            self.decoder.up_block4[0].copy_(
+                vae.decoder.up_blocks[3].resnets[0]
+            )
+            self.decoder.up_block4[1].copy_(
+                vae.decoder.up_blocks[3].resnets[1]
+            )
+            self.decoder.up_block4[2].copy_(
+                vae.decoder.up_blocks[3].resnets[2]
+            )
+            # ---------------------------------------------------------------------------------
+            # ---------------------------------------------------------------------------------
+            self.decoder.groupnorm.weight.copy_(
+                vae.decoder.conv_norm_out.weight
+            )
+            self.decoder.groupnorm.bias.copy_(
+                vae.decoder.conv_norm_out.bias
+            )
+            self.decoder.output_conv.weight.copy_(
+                vae.decoder.conv_out.weight
+            )
+            self.decoder.output_conv.bias.copy_(
+                vae.decoder.conv_out.bias
+            )
 

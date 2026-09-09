@@ -11,6 +11,9 @@ StableDiffusion:
   UNET:
     embed_dim: 768
     heads: 12
+    num_groups: 32
+    time_mlp_channels: 1280
+    ff_expansion: 4
     upsample_scale_factor: 2
 
   VAE:

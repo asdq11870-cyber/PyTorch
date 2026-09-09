@@ -2,6 +2,7 @@ import torch
 from torch import nn
 from models.StableDiffusionV1.CLIPTransformer import CLIPTransformer
 from transformers import CLIPTokenizer
+from diffusers import UNet2DConditionModel
 import yaml
 
 with open("Parameters.yaml","r") as f:
@@ -154,7 +155,7 @@ class Upsample(nn.Module):
         x = self.upsampling_conv(x)
         return x
 
-class MultiHeadSelfAttentionBlock(nn.Module):
+class MultiHeadSelfAttention(nn.Module):
     def __init__(self, embed_dim:int, heads:int):
         super().__init__()
         assert embed_dim % heads == 0, "Embedding dimension must be divisible by number of heads"
@@ -178,7 +179,7 @@ class MultiHeadSelfAttentionBlock(nn.Module):
         attn_scores = torch.softmax(attn_scores, dim=-1) @ value
         return self.projection(attn_scores)
 
-class MultiHeadCrossAttentionBlock(nn.Module):
+class MultiHeadCrossAttention(nn.Module):
     def __init__(self, embed_dim:int, heads:int, channels:int, max_seq_len:int):
         super().__init__()
         assert channels % heads == 0, "Embedding dimension must be divisible by number of heads"
@@ -206,6 +207,34 @@ class MultiHeadCrossAttentionBlock(nn.Module):
         attn_scores = torch.softmax(attn_scores, dim=-1) @ value
         attn_output = attn_scores.transpose(2,3).reshape(batch, channels, height, width)
         return self.out_projection(attn_output)
+
+class FeedForward(nn.Module):
+    def __init__(self, channels:int, ff_expansion:int):
+        super().__init__()
+        self.linear_projection_1 = nn.Linear(in_features=channels, out_features=channels*2*ff_expansion)
+        self.gelu = nn.GELU()
+        self.linear_projection_2 = nn.Linear(in_features=channels*ff_expansion, out_features=channels)
+
+    def forward(self, x:torch.Tensor):
+        x = self.linear_projection_1(x)
+        path1, path2 = x.chunk(2, dim=-1)
+        path1 = self.gelu(path1)
+        output = path1 * path2
+        return self.linear_projection_2(output)
+
+
+class CrossAttentionDownBlock(nn.Module):
+    def __init__(self, input_channels:int, output_channels:int, expanded_channels:int, num_groups:int):
+        super().__init__()
+        self.cross_block = nn.ModuleList(
+            [
+                ResNet(in_channels=input_channels, out_channels=output_channels,
+                       expanded_channels=expanded_channels, num_groups=num_groups),
+            ]
+        )
+
+    def forward(self, x:torch.Tensor):
+        pass
         
 class DownBlock(nn.Module):
     def __init__(self):
