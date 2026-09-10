@@ -103,9 +103,9 @@ class MultiHeadCausalSelfAttention(nn.Module):
         attn_scores = (query @ key.transpose(-1,-2)) / (self.head_dim ** 0.5)
         mask = torch.tril(torch.ones(tokens, tokens, device=x.device))
         attn_scores = attn_scores.masked_fill(mask == 0, float("-inf"))
-        attn_scores = torch.softmax(attn_scores, dim=-1) @ value
-        attn_scores = attn_scores.transpose(1,2).reshape(batch, tokens, self.embed_dim)
-        return self.projection(attn_scores)
+        attn_output = torch.softmax(attn_scores, dim=-1) @ value
+        attn_output = attn_output.transpose(1,2).reshape(batch, tokens, self.embed_dim)
+        return self.projection(attn_output)
 
 
 class QuickGELU(nn.Module):

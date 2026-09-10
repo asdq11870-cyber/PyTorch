@@ -21,7 +21,7 @@ StableDiffusion:
     latent_channels: 4
     rgb_channels: &anchor 3
     encoder_input_channels: 128
-    encoder_output_channels: 8
+    encoder_output_channels: 512
     decoder_input_channels: 512
     decoder_output_channels: *anchor
     upsample_scale_factor: 2

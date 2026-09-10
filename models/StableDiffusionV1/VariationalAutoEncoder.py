@@ -14,10 +14,37 @@ class ResNet(nn.Module):
     The input tensor is passed through a group normalisation to divide the
     amount of channels by the number of groups which normalises the channels
     per group and the spatial dimensions. The SiLU activation adds non-linearity.
+    The 3x3 convolutions make connections between the spatial features in neighbouring
+    groups. Since, the channels don't change in ResNet adding seperate input and output
+    channels are unecessary but might provide some use in later SD projects
+    The residual tensor is then passed through a convolution to match the channels
+    of x and the output is then returned.
 
+    Args:
+        in_channels: The input channels into the ResNet block
+        out_channels: The output channels into the ResNet block
+        num_groups: How many groups the channels are divided into
+
+    Returns:
+        x: The tensor that contains all spatial information of neighbours
+
+    Example Tensor:
+        Input, x: (batch_size, in_channels, height, width)
+        after groupnorm1, x:(batch_size, in_channels, height, width)
+        after silu1, x:(batch_size, in_channels, height, width)
+        after conv1, x:(batch_size, out_channels, height, width)
+        after groupnorm2, x:(batch_size, out_channels, height, width)
+        after silu2, x:(batch_size, out_channels, height, width)
+        after conv12 x:(batch_size, out_channels, height, width)
+        after residual, x::(batch_size, out_channels, height, width)
+        Output, x:(batch_size, out_channels, height, width)
+        The tensor doesnt't change shape if channels remain the same
+        but the values inside are effected.
     """
     def __init__(self, in_channels:int, out_channels:int, num_groups:int):
         super().__init__()
+        self.in_channels = in_channels
+        self.out_channels = out_channels
         self.groupnorm1 = nn.GroupNorm(
             num_groups=num_groups, num_channels=in_channels, eps=1e-6
         )
@@ -47,12 +74,47 @@ class ResNet(nn.Module):
         x = self.groupnorm2(x)
         x = self.silu2(x)
         x = self.conv2(x)
-        x = x + self.residual_conv(residual)
+        if self.in_channels != self.out_channels:
+            x = x + self.residual_conv(residual)
+        x = x + residual
         return x
 
 
 class SelfAttention(nn.Module):
     """
+    Spatial self attention facilitates the information exchange between
+    all tokens.
+
+    The input tensor is passed through a group normalisation to normalise values
+    in the feature map within groups of channels. The input tensor is
+    then passed through a learnable query, key and value projection. The query
+    and key tensors determine relationships between the spatial positions. Value
+    contains all the information that is exchanged and how much is dependent on
+    the attention scores. The spatial dimensions become height*width for comparisons
+    between the spatial positions. 
+
+    Args:
+        num_groups: The number of groups that the channels are split into
+        channels: The input channels
+        x: The input tensor containing all spatial visual information
+
+    Returns:
+        x: Tensor containing all spatial information after and before self
+        attention
+
+    Example Tensor:
+        Input, x:(batch_size, channels, height, width)
+        after groupnorm, x:(batch_size, channels, height, width)
+        after query_conv, query:(batch_size, channels, height, width)
+        after key_conv: key:(batch_size, channels, height, width)
+        after value_conv: value:(batch_size, channels, height, width)
+        after reshape: query:(batch_size, height*width, channels)
+        after reshape: key:(batch_size, channels, height*width)
+        after reshape: value:(batch_size, channels, height*width)
+        attn_scores:(batch_size, height*width, width*height)
+        attn_output:(batch, channels, height*width)
+        after reshape, attn_output:(batch, channels, height, width)
+        Output, attn_scores:(batch, channels, height, width)
     """
     def __init__(self, num_groups:int, channels:int):
         super().__init__()
@@ -98,14 +160,33 @@ class SelfAttention(nn.Module):
         attn_scores = query @ key.transpose(-1,-2)
         attn_scores = attn_scores / (self.channels ** 0.5)
         attn_scores = torch.softmax(attn_scores, dim=-1)
-        attn_scores = attn_scores @ value
+        attn_output = value @ attn_scores.transpose(-1,-2)
 
-        attn_scores = attn_scores.permute(0,2,1).reshape(batch, self.channels, height, width)
-        return residual + self.projection(attn_scores)
+        attn_output = attn_output.reshape(batch, self.channels, height, width)
+        return residual + self.projection(attn_output)
 
 
 class Downsample(nn.Module):
     """
+    Halves the amount of spatial features and increases the amount of channels
+    so the features become more rich. This is used to compress the image and 
+    eventually form the latent image used in the diffusion process
+
+    The input tensor is passed through a convolution with a stride of two. The
+    kernel then skips over half of the features to halve the amount of features
+    returned. Output channels must be greater than input channels.
+
+    Args:
+        input_channels: The input tensor's channels
+        output_channels: The desired output tensor's channels
+        x: The input tensor
+
+    Returns:
+        x: The desired tensor with increased channels and decreased features
+
+    Example Tensor:
+        Input, x:(batch, input_channels, height, width)
+        Output, x:(batch, output_channels, height/2, width/2)
     """
     def __init__(self, input_channels:int, output_channels:int):
         super().__init__()
@@ -122,6 +203,27 @@ class Downsample(nn.Module):
 
 class Upsample(nn.Module):
     """
+    Doubles the amount of spatial features and decreases the amount of channels.
+    This is used to expand the image and form the final generated image.
+
+    Using nearest-neighbour interpolation it increases the spatial resolution.
+    New pixels are created by taking reference from the nearest original pixel so 
+    thus increasing the amount of pixels per area increases the spatial resolution.
+    The 3x3 convolution decreases the channels to mirror the downsamping path and 
+    reduce computational load.
+
+    Args:
+        input_channels: The input tensor's channels
+        output_channels: The desired output tensor's channels
+        x: The input tensor
+        scale_factor: The factor the the spatial dimension are scaled at
+
+    Returns:
+        x: The desired tensor with decreased channels and increased features
+
+    Example Tensor:
+        Input, x:(batch, input_channels, height, width)
+        Output, x:(batch, output_channels, height*2, width*2)
     """
     def __init__(self, input_channels:int, output_channels:int, scale_factor:int=config["upsample_scale_factor"]):
         super().__init__()
@@ -140,8 +242,26 @@ class Upsample(nn.Module):
 
 class Encoder(nn.Module):
     """
+    Converts the image x into a latent representation of z to be used in the diffusion process
+
+    The image is passed through several ResNet and Downsample blocks to transform the spatial features
+    and add non-linearity to the weights and also to decrease the spatial dimensions in the feature
+    map and increase the number of channels in the image. In the middle block, the self attention blocks
+    determines the relationships and the information exchange between all features. The transformed
+    image is passed then to a group normalisation to normal the feature map values in the groups per channel.
+    The SiLU activation enchances the gradients flow and stability of the weights. The output is then projected
+    into the number of latent channels and then returned.
+
+    Args:
+        input_channels: The encoder's input channels
+        output_channels: The encoder's output channels
+        rgb_channels: The number of channels in rgb
+        num_groups: The number of groups that the channels are divided into
+
+    Returns:
+        An transformed image that has be downsized 
     """
-    def __init__(self, embed_dim:int, input_channels:int, output_channels:int, rgb_channels:int, num_groups:int):
+    def __init__(self, input_channels:int, output_channels:int, rgb_channels:int, num_groups:int):
         super().__init__()
         self.input_channels = input_channels
         self.input_channelsx2 = input_channels * 2
@@ -188,16 +308,11 @@ class Encoder(nn.Module):
             ]
         )
         self.groupnorm = nn.GroupNorm(num_groups=num_groups, num_channels=self.input_channelsx4, eps=1e-6)
-        self.silu = nn.SiLU(inplace=True)
+        self.silu = nn.SiLU()
         self.proj_conv = nn.Conv2d(
             in_channels=self.input_channelsx4, out_channels=output_channels,
             kernel_size=(3,3), stride=1, padding=1
         )
-        self.quant_conv = nn.Conv2d(
-            in_channels=output_channels, out_channels=2*embed_dim,
-            kernel_size=(1,1), stride=1, padding=0
-        )
-        self.latent_distribution = LatentDistribution()
     def forward(self, x:torch.Tensor):
         x = self.input_conv(x)
         for block1 in self.down_block1:
@@ -213,23 +328,36 @@ class Encoder(nn.Module):
         x = self.groupnorm(x)
         x = self.silu(x)
         x = self.proj_conv(x)
-        x = self.quant_conv(x)
-        z = self.latent_distribution(x)
-        return z
+        return x
 
 
 class Decoder(nn.Module):
     """
+    Converts the latent representation z that has undergone denoising to the generated image x_hat 
+    
+    The latent representation passes through the middle block where the ResNet blocks transform
+    the spatial features and add non-linearity similar to the encoder blocks. The self attention
+    class is used to exchange positional information with all features. The input tensor then passes
+    through several up blocks which contain the upsampling class. This increases the amount of 
+    spatial features and decreases the number of channels. The transformed image is passed then to a
+    group normalisation to normal the feature map values in the groups per channel. The SiLU activation
+    enchances the gradients flow and stability of the weights. The output is then projected
+    as rgb channels before being returned.
+
+    Args:
+        input_channels: The decoders's input channels
+        output_channels: The decoders's output channels
+        latent_channels: The amount of channels the latent representation has
+        num_groups: The number of groups that the channels are divided into
+
+    Returns:
+        Generated image
     """
-    def __init__(self, embed_dim:int, rgb_channels:int, latent_channels:int, input_channels:int, num_groups:int):
+    def __init__(self, rgb_channels:int, latent_channels:int, input_channels:int, num_groups:int):
         super().__init__()
         self.input_channels = input_channels
         self.input_channels_2 = input_channels // 2
         self.input_channels_4 = input_channels // 4
-        self.post_quant_conv = nn.Conv2d(
-            in_channels=embed_dim, out_channels=latent_channels,
-            kernel_size=(1,1), stride=1, padding=0
-        )
         self.proj_conv = nn.Conv2d(
             in_channels=latent_channels, out_channels=input_channels,
             kernel_size=(3,3), stride=1, padding=1
@@ -298,6 +426,23 @@ class Decoder(nn.Module):
 
 class LatentDistribution(nn.Module):
     """
+    This class creates the latent representation by applying noise to the mean
+    and variance information of the input tensor
+
+    The noise tensor is randomly generated from a tensor with similar shape to x.
+    The code is made device-agnostic by applying the device from x to the noise.
+    Mean and log variance are produced by chunking the input tensor. Standard deviation
+    is applied and the latent representation is returned.
+
+    Args:
+        x: The input tensor from the encoder's output
+
+    Returns:
+        z: The latent representation
+
+    Example Tensor:
+        x: (batch_size, channels, height, width)
+        z: (batch_size, channels, height, width)
     """
     def __init__(self):
         super().__init__()
@@ -312,6 +457,21 @@ class LatentDistribution(nn.Module):
 
 class VAE(nn.Module):
     """
+    This class is the final Variational Autoencoder class that uses KL regularization.
+
+    Based on the user's choice this can be used to encode or decode images. If encode
+    is chosen then the image x is passed through the encoder, quantisation convolution
+    to compress the 512 channels used in the encoder to 8 channels needed for latent
+    distribution which produces the latent representation z. If decode is chosen then
+    the image passes through a post quantisation convolution to for projection and then
+    passes through the decoder to produce the final generate image.
+
+    Args:
+        encode: If true the VAE will encode the input
+        decode: If true the VAE will decode the input
+
+    Returns:
+        Either a latent representation or generated image
     """
     def __init__(self, encode:bool, decode:bool):
         super().__init__()
@@ -321,6 +481,7 @@ class VAE(nn.Module):
             self.decode = False
         if self.decode:
             self.encode = False
+        assert self.encode == self.decode, "Encode and Decode cannot be the value!"
         
         embed_dim = config["embed_dim"]
         num_groups = config["num_groups"]
@@ -331,14 +492,28 @@ class VAE(nn.Module):
         decoder_input_channels = config["decoder_input_channels"]
         decoder_output_channels = config["decoder_output_channels"]
 
-        self.encoder = Encoder(embed_dim=embed_dim,input_channels=encoder_input_channels,
+        self.encoder = Encoder(input_channels=encoder_input_channels,
                                output_channels=encoder_output_channels, rgb_channels=rgb_channels, num_groups=num_groups)
-        self.decoder = Decoder(embed_dim=embed_dim,rgb_channels=decoder_output_channels,
+        self.decoder = Decoder(rgb_channels=decoder_output_channels,
                                latent_channels=latent_channels, input_channels=decoder_input_channels, num_groups=num_groups)
+        self.quant_conv = nn.Conv2d(
+            in_channels=encoder_output_channels, out_channels=2*embed_dim,
+            kernel_size=(1,1), stride=1, padding=0
+        )
+        self.post_quant_conv = nn.Conv2d(
+            in_channels=embed_dim, out_channels=latent_channels,
+            kernel_size=(1,1), stride=1, padding=0
+        )
+        self.latent_distribution = LatentDistribution()
 
     def forward(self, x:torch.Tensor):
-        if self.encode: x = self.encoder(x)
-        elif self.decode: x = self.decoder(x)
+        if self.encode: 
+            x = self.encoder(x)
+            x = self.quant_conv(x)
+            x = self.latent_distribution(x)
+        elif self.decode:
+            x = self.post_quant_conv(x)
+            x = self.decoder(x)
         return x
 
     def load_pretrained(self):
@@ -354,47 +529,67 @@ class VAE(nn.Module):
             )
             # ---------------------------------------------------------------------------------
             # ---------------------------------------------------------------------------------
-            self.encoder.down_block1[0].copy_(
-                vae.encoder.down_blocks[0].resnets[0]
+            self.encoder.down_block1[0].groupnorm1.weight.copy_(
+                vae.encoder.down_blocks[0].resnets[0].norm1.weight
             )
-            self.encoder.down_block1[1].copy_(
-                vae.encoder.down_blocks[0].resnets[1]
+            self.encoder.down_block1[0].groupnorm1.bias.copy_(
+                vae.encoder.down_blocks[0].resnets[0].norm1.bias
             )
-            self.encoder.down_block1[2].copy_(
-                vae.encoder.down_blocks[0].downsamplers[0]
+            self.encoder.down_block1[0].groupnorm2.weight.copy_(
+                vae.encoder.down_blocks[0].resnets[0].norm2.weight
             )
-            self.encoder.down_block2[0].copy_(
-                vae.encoder.down_blocks[1].resnets[0]
+            self.encoder.down_block1[0].groupnorm2.bias.copy_(
+                vae.encoder.down_blocks[0].resnets[0].norm2.bias
             )
-            self.encoder.down_block2[1].copy_(
-                vae.encoder.down_blocks[1].resnets[1]
+            self.encoder.down_block1[0].conv1.weight.copy_(
+                vae.encoder.down_blocks[0].resnets[0].conv1.weight
             )
-            self.encoder.down_block2[2].copy_(
-                vae.encoder.down_blocks[1].downsamplers[0]
+            self.encoder.down_block1[0].conv1.bias.copy_(
+                vae.encoder.down_blocks[0].resnets[0].conv1.bias
             )
-            self.encoder.down_block3[0].copy_(
-                vae.encoder.down_blocks[2].resnets[0]
+            self.encoder.down_block1[0].conv2.weight.copy_(
+                vae.encoder.down_blocks[0].resnets[0].conv2.weight
             )
-            self.encoder.down_block3[1].copy_(
-                vae.encoder.down_blocks[2].resnets[1]
+            self.encoder.down_block1[0].conv2.bias.copy_(
+                vae.encoder.down_blocks[0].resnets[0].conv2.bias
             )
-            self.encoder.down_block3[2].copy_(
-                vae.encoder.down_blocks[2].downsamplers[0]
+            self.encoder.down_block1[0].residual_conv.weight.copy_(
+                vae.encoder.down_blocks[0].resnets[0].conv_shortcut.weight
             )
-            self.encoder.down_block4[0].copy_(
-                vae.encoder.down_blocks[3].resnets[0]
+            self.encoder.down_block1[0].residual_conv.bias.copy_(
+                vae.encoder.down_blocks[0].resnets[0].conv_shortcut.bias
             )
-            self.encoder.down_block4[1].copy_(
-                vae.encoder.down_blocks[3].resnets[1]
+            # ---------------------------------------------------------------------------------
+            # ---------------------------------------------------------------------------------
+            self.encoder.down_block1[1].groupnorm1.weight.copy_(
+                vae.encoder.down_blocks[0].resnets[1].norm1.weight
             )
-            self.encoder.middle_block[0].copy_(
-                vae.encoder.mid_block.resnets[0]
+            self.encoder.down_block1[1].groupnorm1.bias.copy_(
+                vae.encoder.down_blocks[0].resnets[1].norm1.bias
             )
-            self.encoder.middle_block[1].copy_(
-                vae.encoder.mid_block.attentions[0]
+            self.encoder.down_block1[1].groupnorm2.weight.copy_(
+                vae.encoder.down_blocks[0].resnets[1].norm2.weight
             )
-            self.encoder.middle_block[2].copy_(
-                vae.encoder.mid_block.resnets[1]
+            self.encoder.down_block1[1].groupnorm2.bias.copy_(
+                vae.encoder.down_blocks[0].resnets[1].norm2.bias
+            )
+            self.encoder.down_block1[1].conv1.weight.copy_(
+                vae.encoder.down_blocks[0].resnets[1].conv1.weight
+            )
+            self.encoder.down_block1[1].conv1.bias.copy_(
+                vae.encoder.down_blocks[0].resnets[1].conv1.bias
+            )
+            self.encoder.down_block1[1].conv2.weight.copy_(
+                vae.encoder.down_blocks[0].resnets[1].conv2.weight
+            )
+            self.encoder.down_block1[1].conv2.bias.copy_(
+                vae.encoder.down_blocks[0].resnets[1].conv2.bias
+            )
+            self.encoder.down_block1[1].residual_conv.weight.copy_(
+                vae.encoder.down_blocks[0].resnets[1].conv_shortcut.weight
+            )
+            self.encoder.down_block1[1].residual_conv.bias.copy_(
+                vae.encoder.down_blocks[0].resnets[1].conv_shortcut.bias
             )
             # ---------------------------------------------------------------------------------
             # ---------------------------------------------------------------------------------
@@ -409,22 +604,6 @@ class VAE(nn.Module):
             )
             self.encoder.proj_conv.bias.copy_(
                 vae.encoder.conv_out.bias
-            )
-            self.encoder.quant_conv.weight.copy_(
-                vae.quant_conv.weight
-            )
-            self.encoder.quant_conv.bias.copy_(
-                vae.quant_conv.bias
-            )
-            # ---------------------------------------------------------------------------------
-            # ---------------------------------------------------------------------------------
-            # ---------------------------------------------------------------------------------
-            # ---------------------------------------------------------------------------------
-            self.decoder.post_quant_conv.weight.copy_(
-                vae.post_quant_conv.weight
-            )
-            self.decoder.post_quant_conv.bias.copy_(
-                vae.post_quant_conv.bias
             )
             self.decoder.proj_conv.weight.copy_(
                 vae.decoder.conv_in.weight
@@ -501,5 +680,19 @@ class VAE(nn.Module):
             )
             self.decoder.output_conv.bias.copy_(
                 vae.decoder.conv_out.bias
+            )
+            # ---------------------------------------------------------------------------------
+            # ---------------------------------------------------------------------------------
+            self.quant_conv.weight.copy_(
+                vae.quant_conv.weight
+            )
+            self.quant_conv.bias.copy_(
+                vae.quant_conv.bias
+            )
+            self.post_quant_conv.weight.copy_(
+                vae.quant_conv.weight
+            )
+            self.post_quant_conv.bias.copy_(
+                vae.quant_conv.bias
             )
 

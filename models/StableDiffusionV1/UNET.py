@@ -6,7 +6,8 @@ from diffusers import UNet2DConditionModel
 import yaml
 
 with open("Parameters.yaml","r") as f:
-    config = yaml.safe_load(f)["UNET"]
+    unet_config = yaml.safe_load(f)["UNET"]
+    clip_config = yaml.safe_load(f)["CLIP"]
 
 class TimestepEmbedding(nn.Module):
     """
@@ -224,12 +225,17 @@ class FeedForward(nn.Module):
 
 
 class CrossAttentionDownBlock(nn.Module):
-    def __init__(self, input_channels:int, output_channels:int, expanded_channels:int, num_groups:int):
+    def __init__(self, input_channels:int, output_channels:int, expanded_channels:int, num_groups:int, embed_dim:int, heads:int,
+                 max_seq_len:int=clip_config["max_seq_len"],ff_expansion:int=unet_config["ff_expansion"]):
         super().__init__()
-        self.cross_block = nn.ModuleList(
+        self.cross_block1 = nn.ModuleList(
             [
                 ResNet(in_channels=input_channels, out_channels=output_channels,
                        expanded_channels=expanded_channels, num_groups=num_groups),
+                MultiHeadSelfAttention(embed_dim=embed_dim, heads=heads),
+                MultiHeadCrossAttention(embed_dim=embed_dim, heads=heads, channels=output_channels,
+                                        max_seq_len=max_seq_len),
+                FeedForward(channels=output_channels, ff_expansion=ff_expansion)
             ]
         )
 
