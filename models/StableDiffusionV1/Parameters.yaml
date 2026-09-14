@@ -9,8 +9,9 @@ StableDiffusion:
     num_encoder_layers: 12
 
   UNET:
-    embed_dim: 768
+    temb_channels: 1280
     heads: 12
+    resnet_eps: 1e-6
     num_groups: 32
     time_mlp_channels: 1280
     ff_expansion: 4

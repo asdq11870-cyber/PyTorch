@@ -15,12 +15,12 @@ class TimestepEmbedding(nn.Module):
 
     A 1D vector of zeros is created with a batch number of rows and embedded dimension
     for the number of columns. The code is made device agnostic and converting to an 
-    essential datatype. Then apply the frequency equation 2i: sin(t/10000^2j/embed_dim)
-    and 2i+1: cos(t/10000^2j/embed_dim). This tensor is then pass through a mlp projection
+    essential datatype. Then apply the frequency equation 2i: sin(t/10000^2j/temb_channels)
+    and 2i+1: cos(t/10000^2j/temb_channels). This tensor is then pass through a mlp projection
     or learnable projection to prepare it for the injection into the ResNet blocks
 
     Args:
-        embed_dim: The embedded dimension
+        temb_channels: The embedded dimension
         timestep: The scalar we want to convert into a vector
         expanded_channels: The channels used in the mlp projection to add features and non-linearity
 
@@ -28,29 +28,32 @@ class TimestepEmbedding(nn.Module):
         a: The 1D timestep vector for each image
 
     Example:
-        a: (batch_size, embed_dim)
-        After for loop: (batch_size, embed_dim)
+        a: (batch_size, temb_channels)
+        After for loop: (batch_size, temb_channels)
         After projection: (batch_size, 1280)
     """
-    def __init__(self, embed_dim:int, expanded_channels:int):
+    def __init__(self, temb_channels:int, out_channels:int):
         super().__init__()
-        self.embed_dim = embed_dim
-        assert self.embed_dim % 2 == 0, "Embedded Dimension should be even!"
+        self.temb_channels = temb_channels
+        assert self.temb_channels % 2 == 0, "Embedded Dimension should be even!"
         self.time_mlp_projection = nn.Sequential(
-            nn.Linear(in_features=embed_dim, out_features=expanded_channels),
+            nn.Linear(in_features=temb_channels, out_features=out_channels),
             nn.SiLU(),
-            nn.Linear(in_features=expanded_channels,out_features=expanded_channels)
+            nn.Linear(in_features=out_channels,out_features=out_channels)
         )
 
-    def forward(self, timestep:torch.Tensor) -> torch.Tensor:
-        a = torch.zeros(timestep.shape[0], self.embed_dim).to(device=timestep.device, dtype="float32")
-        j = 0
-        for i in range(0,self.embed_dim,2):
-            a[:,i] = torch.sin(timestep/torch.pow(10000,(2*j)/self.embed_dim))
-            a[:,i+1] = torch.cos(timestep/torch.pow(10000,(2*j)/self.embed_dim))    
-            j += 1
-        a = self.time_mlp_projection(a)
+    def vectorize(self, timestep:torch.Tensor):
+        a = torch.zeros(timestep.shape[0], self.temb_channels).to(device=timestep.device, dtype="float32")
+        indices = torch.arange(0, self.temb_channels//2, device=a.device, dtype=a.dtype)
+        a[:,0::2] = torch.sin(timestep/torch.pow(10000,(2*indices)/self.temb_channels))
+        a[:,1::2] = torch.cos(timestep/torch.pow(10000,(2*indices)/self.temb_channels))
         return a
+
+    def forward(self, timestep:torch.Tensor) -> torch.Tensor:
+        timestep.unsqueeze(dim=1)
+        temb = self.vectorize(timestep=timestep)
+        temb = self.time_mlp_projection(temb)
+        return temb
 
 class ResNet(nn.Module):
     """
@@ -62,7 +65,7 @@ class ResNet(nn.Module):
     pass through a convolution that refines features. The timestep 
     vector is projected from the expanded_channels in the mlp step to 
     the out_channels corresponding to the channels in the U-Net. The 
-    vector is then reshaped to add two new dimensions and concatenated 
+    vector is then reshaped to add two new dimensions and added 
     to the latent image. The latent images then pass through a second
     group normalisation and activation, then pass through a convolution 
     that does further refinement after timestep injection. The final 
@@ -91,7 +94,7 @@ class ResNet(nn.Module):
         after conv2: (batch_size, out_channels, height, width)
         after residual addition: (batch_size, out_channels, height, width)
     """
-    def __init__(self, in_channels:int, out_channels:int, expanded_channels:int, num_groups:int):
+    def __init__(self, in_channels:int, out_channels:int, expanded_channels:int, num_groups:int, resnet_eps:float):
         super().__init__()
         self.timestep_projection = nn.Linear(
             in_features=expanded_channels, out_features=out_channels
@@ -108,11 +111,13 @@ class ResNet(nn.Module):
             in_channels=out_channels, out_channels=out_channels,
             kernel_size=(3,3), stride=1, padding=1
         )
+        self.in_channels = in_channels
+        self.out_channels = out_channels
         self.silu1 = nn.SiLU()
         self.silu2 = nn.SiLU()
-        self.groupnorm1 = nn.GroupNorm(num_groups=num_groups, num_channels=in_channels)
-        self.groupnorm2 = nn.GroupNorm(num_groups=num_groups, num_channels=out_channels)
-        self.dropout = nn.Dropout2d(p=0.5, inplace=True)
+        self.groupnorm1 = nn.GroupNorm(num_groups=num_groups, num_channels=in_channels, eps=resnet_eps)
+        self.groupnorm2 = nn.GroupNorm(num_groups=num_groups, num_channels=out_channels, eps=resnet_eps)
+        self.dropout = nn.Dropout2d(p=0.5)
 
     def forward(self, x:torch.Tensor, timestep_vector:torch.Tensor) -> torch.Tensor:
         residual = x
@@ -127,7 +132,10 @@ class ResNet(nn.Module):
         x = self.silu2(x)
         x = self.dropout(x)
         x = self.conv2(x)
-        x = x + self.residual_conv(residual)
+        if self.in_channels != self.out_channels:
+            x = x + self.residual_conv(residual)
+        else:
+            x = x + residual
         return x
         
 class Downsample(nn.Module):
@@ -157,13 +165,13 @@ class Upsample(nn.Module):
         return x
 
 class MultiHeadSelfAttention(nn.Module):
-    def __init__(self, embed_dim:int, heads:int):
+    def __init__(self, temb_channels:int, heads:int):
         super().__init__()
-        assert embed_dim % heads == 0, "Embedding dimension must be divisible by number of heads"
-        self.head_dim = embed_dim // heads
-        self.qkv_projection = nn.Linear(in_features=embed_dim, out_features=embed_dim * 3)
-        self.projection = nn.Linear(in_features=embed_dim, out_features=embed_dim)
-        self.embed_dim = embed_dim
+        assert temb_channels % heads == 0, "Embedding dimension must be divisible by number of heads"
+        self.head_dim = temb_channels // heads
+        self.qkv_projection = nn.Linear(in_features=temb_channels, out_features=temb_channels * 3)
+        self.projection = nn.Linear(in_features=temb_channels, out_features=temb_channels)
+        self.temb_channels = temb_channels
         self.heads = heads
 
     def forward(self, x:torch.Tensor):
@@ -181,15 +189,15 @@ class MultiHeadSelfAttention(nn.Module):
         return self.projection(attn_scores)
 
 class MultiHeadCrossAttention(nn.Module):
-    def __init__(self, embed_dim:int, heads:int, channels:int, max_seq_len:int):
+    def __init__(self, temb_channels:int, heads:int, channels:int, max_seq_len:int):
         super().__init__()
         assert channels % heads == 0, "Embedding dimension must be divisible by number of heads"
         self.head_dim = channels // heads
         self.heads = heads
         self.max_seq_len = max_seq_len
         self.q_projection = nn.Linear(in_features=channels, out_features=channels)
-        self.k_projection = nn.Linear(in_features=embed_dim, out_features=channels)
-        self.v_projection = nn.Linear(in_features=embed_dim, out_features=channels)
+        self.k_projection = nn.Linear(in_features=temb_channels, out_features=channels)
+        self.v_projection = nn.Linear(in_features=temb_channels, out_features=channels)
         self.out_projection = nn.Conv2d(
             in_channels=channels, out_channels=channels,
             kernel_size=(1,1), stride=1, padding=0
@@ -223,40 +231,49 @@ class FeedForward(nn.Module):
         output = path1 * path2
         return self.linear_projection_2(output)
 
-
-class CrossAttentionDownBlock(nn.Module):
-    def __init__(self, input_channels:int, output_channels:int, expanded_channels:int, num_groups:int, embed_dim:int, heads:int,
-                 max_seq_len:int=clip_config["max_seq_len"],ff_expansion:int=unet_config["ff_expansion"]):
+class BasicTransformerBlock(nn.Module):
+    def __init__(self):
         super().__init__()
-        self.cross_block1 = nn.ModuleList(
-            [
-                ResNet(in_channels=input_channels, out_channels=output_channels,
-                       expanded_channels=expanded_channels, num_groups=num_groups),
-                MultiHeadSelfAttention(embed_dim=embed_dim, heads=heads),
-                MultiHeadCrossAttention(embed_dim=embed_dim, heads=heads, channels=output_channels,
-                                        max_seq_len=max_seq_len),
-                FeedForward(channels=output_channels, ff_expansion=ff_expansion)
-            ]
-        )
+
+    def forward(self, x:torch.Tensor):
+        pass
+
+class Transformer2D(nn.Module):
+    def __init__(self):
+        super().__init__()
+
+    def forward(self, x:torch.Tensor):
+        pass
+
+class CrossAttnDownBlock2D(nn.Module):
+    def __init__(self):
+        super().__init__()
 
     def forward(self, x:torch.Tensor):
         pass
         
-class DownBlock(nn.Module):
+class DownBlock2D(nn.Module):
+    def __init__(self, input_channels:int, output_channels:int):
+        super().__init__()
+
+    def forward(self, x:torch.Tensor):
+        pass
+
+class MidBlock2D(nn.Module):
     def __init__(self):
         super().__init__()
 
     def forward(self, x:torch.Tensor):
         pass
 
-class MidBlock(nn.Module):
+class CrossAttnUpBlock2D(nn.Module):
     def __init__(self):
         super().__init__()
 
     def forward(self, x:torch.Tensor):
         pass
 
-class UpBlock(nn.Module):
+class UpBlock2D(nn.Module):
     def __init__(self):
         super().__init__()
 
