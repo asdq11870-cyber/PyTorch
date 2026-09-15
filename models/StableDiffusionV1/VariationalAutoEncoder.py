@@ -261,8 +261,15 @@ class Encoder(nn.Module):
     Returns:
         An transformed image that has be downsized 
     """
-    def __init__(self, input_channels:int, output_channels:int, rgb_channels:int, num_groups:int):
+    def __init__(self, input_channels:int=config["encoder_input_channels"],
+                output_channels:int=config["encoder_output_channels"],
+                rgb_channels:int=config["rgb_channels"],
+                num_groups:int=config["num_groups"],
+                num_downblocks:int=config["encoder_num_downblocks"],
+                num_resnets:int=config["encoder_num_resnets"],
+                num_downsamplers:int=config["encoder_num_downsamplers"]):
         super().__init__()
+        self.num_downblocks = num_downblocks
         self.input_channels = input_channels
         self.input_channelsx2 = input_channels * 2
         self.input_channelsx4 = input_channels * 4
@@ -275,29 +282,42 @@ class Encoder(nn.Module):
         )
         self.down_block1 = nn.ModuleList(
             [
-                ResNet(num_groups=num_groups, in_channels=input_channels, out_channels=input_channels),
-                ResNet(num_groups=num_groups, in_channels=input_channels, out_channels=input_channels),
-                Downsample(input_channels=self.input_channels, output_channels=self.input_channelsx2)
+                ResNet(num_groups=num_groups, in_channels=input_channels, out_channels=input_channels)
+                for _ in range(num_resnets)
             ]
+            +
+            [
+                Downsample(input_channels=self.input_channels, output_channels=self.input_channelsx2)
+                for _ in range(num_downsamplers)
+            ]
+                
         )
         self.down_block2 = nn.ModuleList(
             [
-                ResNet(num_groups=num_groups, in_channels=self.input_channelsx2, out_channels=self.input_channelsx2),
-                ResNet(num_groups=num_groups, in_channels=self.input_channelsx2, out_channels=self.input_channelsx2),
+                ResNet(num_groups=num_groups, in_channels=self.input_channelsx2, out_channels=self.input_channelsx2)
+                for _ in range(num_resnets)
+            ]
+            +
+            [
                 Downsample(input_channels=self.input_channelsx2, output_channels=self.input_channelsx4)
+                for _ in range(num_downsamplers)
             ]
         )
         self.down_block3 = nn.ModuleList(
             [
-                ResNet(num_groups=num_groups, in_channels=self.input_channelsx4, out_channels=self.input_channelsx4),
-                ResNet(num_groups=num_groups, in_channels=self.input_channelsx4, out_channels=self.input_channelsx4),
+                ResNet(num_groups=num_groups, in_channels=self.input_channelsx4, out_channels=self.input_channelsx4)
+                for _ in range(num_resnets)
+            ]
+            +
+            [
                 Downsample(input_channels=self.input_channelsx4, output_channels=self.input_channelsx4)
+                for _ in range(num_downsamplers)
             ]
         )
         self.down_block4 = nn.ModuleList(
             [
-                ResNet(num_groups=num_groups, in_channels=self.input_channelsx4, out_channels=self.input_channelsx4),
                 ResNet(num_groups=num_groups, in_channels=self.input_channelsx4, out_channels=self.input_channelsx4)
+                for _ in range(num_resnets)
             ]
         )
         self.middle_block = nn.ModuleList(
@@ -305,6 +325,14 @@ class Encoder(nn.Module):
                 ResNet(num_groups=num_groups, in_channels=self.input_channelsx4, out_channels=self.input_channelsx4),
                 SelfAttention(num_groups=num_groups, channels=self.input_channelsx4),
                 ResNet(num_groups=num_groups, in_channels=self.input_channelsx4, out_channels=self.input_channelsx4)
+            ]
+        )
+        self.down_blocks = nn.ModuleList(
+            [
+                self.down_block1,
+                self.down_block2,
+                self.down_block3,
+                self.down_block4
             ]
         )
         self.groupnorm = nn.GroupNorm(num_groups=num_groups, num_channels=self.input_channelsx4, eps=1e-6)
@@ -315,16 +343,11 @@ class Encoder(nn.Module):
         )
     def forward(self, x:torch.Tensor):
         x = self.input_conv(x)
-        for block1 in self.down_block1:
-            x = block1(x)
-        for block2 in self.down_block2:
-            x = block2(x)
-        for block3 in self.down_block3:
-            x = block3(x)
-        for block4 in self.down_block4:
-            x = block4(x)
-        for block5 in self.middle_block:
-            x = block5(x)
+        for i in range(self.num_downblocks):
+            for block in self.down_blocks[i]:
+                x = block(x)
+        for block in self.middle_block:
+            x = block(x)
         x = self.groupnorm(x)
         x = self.silu(x)
         x = self.proj_conv(x)
@@ -353,8 +376,15 @@ class Decoder(nn.Module):
     Returns:
         Generated image
     """
-    def __init__(self, rgb_channels:int, latent_channels:int, input_channels:int, num_groups:int):
+    def __init__(self, rgb_channels:int=config["rgb_channels"],
+                latent_channels:int=config["latent_channels"],
+                input_channels:int=config["decoder_input_channels"],
+                num_groups:int=config["num_groups"],
+                num_upblocks:int=config["decoder_num_upblocks"],
+                num_resnets:int=config["decoder_num_resnets"],
+                num_upsamplers:int=config["decoder_num_upsamplers"]):
         super().__init__()
+        self.num_upblocks = num_upblocks
         self.input_channels = input_channels
         self.input_channels_2 = input_channels // 2
         self.input_channels_4 = input_channels // 4
@@ -371,33 +401,49 @@ class Decoder(nn.Module):
         )
         self.up_block1 = nn.ModuleList(
             [
-                ResNet(num_groups=num_groups, in_channels=input_channels, out_channels=input_channels),
-                ResNet(num_groups=num_groups, in_channels=input_channels, out_channels=input_channels),
-                ResNet(num_groups=num_groups, in_channels=input_channels, out_channels=input_channels),
+                ResNet(num_groups=num_groups, in_channels=input_channels, out_channels=input_channels)
+                for _ in range(num_resnets)
+            ]
+            +
+            [
                 Upsample(input_channels=input_channels, output_channels=self.input_channels_2)
+                for _ in range(num_upsamplers)
             ]
         )
         self.up_block2 = nn.ModuleList(
             [
-                ResNet(num_groups=num_groups, in_channels=self.input_channels_2, out_channels=self.input_channels_2),
-                ResNet(num_groups=num_groups, in_channels=self.input_channels_2, out_channels=self.input_channels_2),
-                ResNet(num_groups=num_groups, in_channels=self.input_channels_2, out_channels=self.input_channels_2),
-                Upsample(input_channels=self.input_channels_2, output_channels=self.input_channels_4)            
+                ResNet(num_groups=num_groups, in_channels=self.input_channels_2, out_channels=self.input_channels_2)
+                for _ in range(num_resnets)           
+            ]
+            +
+            [
+                Upsample(input_channels=self.input_channels_2, output_channels=self.input_channels_4)
+                for _ in range(num_upsamplers)
             ]
         )
         self.up_block3 = nn.ModuleList(
             [
-                ResNet(num_groups=num_groups, in_channels=self.input_channels_4, out_channels=self.input_channels_4),
-                ResNet(num_groups=num_groups, in_channels=self.input_channels_4, out_channels=self.input_channels_4),
-                ResNet(num_groups=num_groups, in_channels=self.input_channels_4, out_channels=self.input_channels_4),
+                ResNet(num_groups=num_groups, in_channels=self.input_channels_4, out_channels=self.input_channels_4)
+                for _ in range(num_resnets)      
+            ]
+            +
+            [
                 Upsample(input_channels=self.input_channels_4, output_channels=self.input_channels_4)
+                for _ in range(num_upsamplers)
             ]
         )
         self.up_block4 = nn.ModuleList(
             [
-                ResNet(num_groups=num_groups, in_channels=self.input_channels_4, out_channels=self.input_channels_4),
-                ResNet(num_groups=num_groups, in_channels=self.input_channels_4, out_channels=self.input_channels_4),
                 ResNet(num_groups=num_groups, in_channels=self.input_channels_4, out_channels=self.input_channels_4)
+                for _ in range(num_resnets)
+            ]
+        )
+        self.up_blocks = nn.ModuleList(
+            [
+                self.up_block1,
+                self.up_block2,
+                self.up_block3,
+                self.up_block4
             ]
         )
         self.groupnorm = nn.GroupNorm(num_groups=num_groups, num_channels=self.input_channels_4, eps=1e-6)
@@ -409,16 +455,11 @@ class Decoder(nn.Module):
     def forward(self, x:torch.Tensor):
         x = self.post_quant_conv(x)
         x = self.proj_conv(x)
-        for block1 in self.middle_block:
-            x = block1(x)
-        for block2 in self.up_block1:
-            x = block2(x)
-        for block3 in self.up_block2:
-            x = block3(x)
-        for block4 in self.up_block3:
-            x = block4(x)
-        for block5 in self.up_block4:
-            x = block5(x)
+        for block in self.middle_block:
+            x = block(x)
+        for i in range(self.num_upblocks):
+            for block in self.up_blocks[i]:
+                x = block(x)
         x = self.groupnorm(x)
         x = self.silu(x)
         x = self.output_conv(x)
@@ -483,25 +524,14 @@ class VAE(nn.Module):
             self.encode = False
         assert self.encode == self.decode, "Encode and Decode cannot be the value!"
         
-        embed_dim = config["embed_dim"]
-        num_groups = config["num_groups"]
-        latent_channels = config["latent_channels"]
-        rgb_channels = config["rgb_channels"]
-        encoder_input_channels = config["encoder_input_channels"]
-        encoder_output_channels = config["encoder_output_channels"]
-        decoder_input_channels = config["decoder_input_channels"]
-        decoder_output_channels = config["decoder_output_channels"]
-
-        self.encoder = Encoder(input_channels=encoder_input_channels,
-                               output_channels=encoder_output_channels, rgb_channels=rgb_channels, num_groups=num_groups)
-        self.decoder = Decoder(rgb_channels=decoder_output_channels,
-                               latent_channels=latent_channels, input_channels=decoder_input_channels, num_groups=num_groups)
+        self.encoder = Encoder()
+        self.decoder = Decoder()
         self.quant_conv = nn.Conv2d(
-            in_channels=encoder_output_channels, out_channels=2*embed_dim,
+            in_channels=config["encoder_output_channels"], out_channels=2*config["embed_dim"],
             kernel_size=(1,1), stride=1, padding=0
         )
         self.post_quant_conv = nn.Conv2d(
-            in_channels=embed_dim, out_channels=latent_channels,
+            in_channels=config["embed_dim"], out_channels=config["latent_channels"],
             kernel_size=(1,1), stride=1, padding=0
         )
         self.latent_distribution = LatentDistribution()
@@ -529,68 +559,47 @@ class VAE(nn.Module):
             )
             # ---------------------------------------------------------------------------------
             # ---------------------------------------------------------------------------------
-            self.encoder.down_block1[0].groupnorm1.weight.copy_(
-                vae.encoder.down_blocks[0].resnets[0].norm1.weight
-            )
-            self.encoder.down_block1[0].groupnorm1.bias.copy_(
-                vae.encoder.down_blocks[0].resnets[0].norm1.bias
-            )
-            self.encoder.down_block1[0].groupnorm2.weight.copy_(
-                vae.encoder.down_blocks[0].resnets[0].norm2.weight
-            )
-            self.encoder.down_block1[0].groupnorm2.bias.copy_(
-                vae.encoder.down_blocks[0].resnets[0].norm2.bias
-            )
-            self.encoder.down_block1[0].conv1.weight.copy_(
-                vae.encoder.down_blocks[0].resnets[0].conv1.weight
-            )
-            self.encoder.down_block1[0].conv1.bias.copy_(
-                vae.encoder.down_blocks[0].resnets[0].conv1.bias
-            )
-            self.encoder.down_block1[0].conv2.weight.copy_(
-                vae.encoder.down_blocks[0].resnets[0].conv2.weight
-            )
-            self.encoder.down_block1[0].conv2.bias.copy_(
-                vae.encoder.down_blocks[0].resnets[0].conv2.bias
-            )
-            self.encoder.down_block1[0].residual_conv.weight.copy_(
-                vae.encoder.down_blocks[0].resnets[0].conv_shortcut.weight
-            )
-            self.encoder.down_block1[0].residual_conv.bias.copy_(
-                vae.encoder.down_blocks[0].resnets[0].conv_shortcut.bias
-            )
-            # ---------------------------------------------------------------------------------
-            # ---------------------------------------------------------------------------------
-            self.encoder.down_block1[1].groupnorm1.weight.copy_(
-                vae.encoder.down_blocks[0].resnets[1].norm1.weight
-            )
-            self.encoder.down_block1[1].groupnorm1.bias.copy_(
-                vae.encoder.down_blocks[0].resnets[1].norm1.bias
-            )
-            self.encoder.down_block1[1].groupnorm2.weight.copy_(
-                vae.encoder.down_blocks[0].resnets[1].norm2.weight
-            )
-            self.encoder.down_block1[1].groupnorm2.bias.copy_(
-                vae.encoder.down_blocks[0].resnets[1].norm2.bias
-            )
-            self.encoder.down_block1[1].conv1.weight.copy_(
-                vae.encoder.down_blocks[0].resnets[1].conv1.weight
-            )
-            self.encoder.down_block1[1].conv1.bias.copy_(
-                vae.encoder.down_blocks[0].resnets[1].conv1.bias
-            )
-            self.encoder.down_block1[1].conv2.weight.copy_(
-                vae.encoder.down_blocks[0].resnets[1].conv2.weight
-            )
-            self.encoder.down_block1[1].conv2.bias.copy_(
-                vae.encoder.down_blocks[0].resnets[1].conv2.bias
-            )
-            self.encoder.down_block1[1].residual_conv.weight.copy_(
-                vae.encoder.down_blocks[0].resnets[1].conv_shortcut.weight
-            )
-            self.encoder.down_block1[1].residual_conv.bias.copy_(
-                vae.encoder.down_blocks[0].resnets[1].conv_shortcut.bias
-            )
+            for down_block_idx in range(config["encoder_num_downblocks"]):
+                for resnet_idx in range(config["encoder_num_resnets"]):
+                    self.encoder.down_blocks[down_block_idx][resnet_idx].groupnorm1.weight.copy_(
+                        vae.encoder.down_blocks[down_block_idx].resnets[resnet_idx].norm1.weight
+                    )
+                    self.encoder.down_blocks[down_block_idx][resnet_idx].groupnorm1.bias.copy_(
+                        vae.encoder.down_blocks[down_block_idx].resnets[resnet_idx].norm1.bias
+                    )
+                    self.encoder.down_blocks[down_block_idx][resnet_idx].groupnorm2.weight.copy_(
+                        vae.encoder.down_blocks[down_block_idx].resnets[resnet_idx].norm2.weight
+                    )
+                    self.encoder.down_blocks[down_block_idx][resnet_idx].groupnorm2.bias.copy_(
+                        vae.encoder.down_blocks[down_block_idx].resnets[resnet_idx].norm2.bias
+                    )
+                    self.encoder.down_blocks[down_block_idx][resnet_idx].conv1.weight.copy_(
+                        vae.encoder.down_blocks[down_block_idx].resnets[resnet_idx].conv1.weight
+                    )
+                    self.encoder.down_blocks[down_block_idx][resnet_idx].conv1.bias.copy_(
+                        vae.encoder.down_blocks[down_block_idx].resnets[resnet_idx].conv1.bias
+                    )
+                    self.encoder.down_blocks[down_block_idx][resnet_idx].conv2.weight.copy_(
+                        vae.encoder.down_blocks[down_block_idx].resnets[resnet_idx].conv2.weight
+                    )
+                    self.encoder.down_blocks[down_block_idx][resnet_idx].conv2.bias.copy_(
+                        vae.encoder.down_blocks[down_block_idx].resnets[resnet_idx].conv2.bias
+                    )
+                    self.encoder.down_blocks[down_block_idx][resnet_idx].residual_conv.weight.copy_(
+                        vae.encoder.down_blocks[down_block_idx].resnets[resnet_idx].conv_shortcut.weight
+                    )
+                    self.encoder.down_blocks[down_block_idx][resnet_idx].residual_conv.bias.copy_(
+                        vae.encoder.down_blocks[down_block_idx].resnets[resnet_idx].conv_shortcut.bias
+                    )
+                for downsample_idx in range(config["encoder_num_downsamplers"]):
+                    if down_block_idx != config["encoder_num_downblocks"]:
+                        self.encoder.down_blocks[down_block_idx][downsample_idx].downsampling_conv.weight.copy_(
+                            vae.encoder.down_blocks[down_block_idx].downsamplers[downsample_idx].conv.weight
+                        )
+                        self.encoder.down_blocks[down_block_idx][downsample_idx].downsampling_conv.bias.copy_(
+                            vae.encoder.down_blocks[down_block_idx].downsamplers[downsample_idx].conv.bias
+                        )
+                    else: continue
             # ---------------------------------------------------------------------------------
             # ---------------------------------------------------------------------------------
             self.encoder.groupnorm.weight.copy_(
@@ -613,60 +622,7 @@ class VAE(nn.Module):
             )
             # ---------------------------------------------------------------------------------
             # ---------------------------------------------------------------------------------
-            self.decoder.middle_block[0].copy_(
-                vae.decoder.mid_block.resnets[0]
-            )
-            self.decoder.middle_block[1].copy_(
-                vae.decoder.mid_block.attentions[0]
-            )
-            self.decoder.middle_block[2].copy_(
-                vae.decoder.mid_block.resnets[1]
-            )
-            self.decoder.up_block1[0].copy_(
-                vae.decoder.up_blocks[0].resnets[0]
-            )
-            self.decoder.up_block1[1].copy_(
-                vae.decoder.up_blocks[0].resnets[1]
-            )
-            self.decoder.up_block1[2].copy_(
-                vae.decoder.up_blocks[0].resnets[2]
-            )
-            self.decoder.up_block1[3].copy_(
-                vae.decoder.up_blocks[0].upsamplers[0]
-            )
-            self.decoder.up_block2[0].copy_(
-                vae.decoder.up_blocks[1].resnets[0]
-            )
-            self.decoder.up_block2[1].copy_(
-                vae.decoder.up_blocks[1].resnets[1]
-            )
-            self.decoder.up_block2[2].copy_(
-                vae.decoder.up_blocks[1].resnets[2]
-            )
-            self.decoder.up_block2[3].copy_(
-                vae.decoder.up_blocks[1].upsamplers[0]
-            )
-            self.decoder.up_block3[0].copy_(
-                vae.decoder.up_blocks[2].resnets[0]
-            )
-            self.decoder.up_block3[1].copy_(
-                vae.decoder.up_blocks[2].resnets[1]
-            )
-            self.decoder.up_block3[2].copy_(
-                vae.decoder.up_blocks[2].resnets[2]
-            )
-            self.decoder.up_block3[3].copy_(
-                vae.decoder.up_blocks[2].upsamplers[0]
-            )
-            self.decoder.up_block4[0].copy_(
-                vae.decoder.up_blocks[3].resnets[0]
-            )
-            self.decoder.up_block4[1].copy_(
-                vae.decoder.up_blocks[3].resnets[1]
-            )
-            self.decoder.up_block4[2].copy_(
-                vae.decoder.up_blocks[3].resnets[2]
-            )
+            # DECODER UP BLOCK AND MID BLOCK WEIGHT COPIES
             # ---------------------------------------------------------------------------------
             # ---------------------------------------------------------------------------------
             self.decoder.groupnorm.weight.copy_(

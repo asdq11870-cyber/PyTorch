@@ -21,10 +21,20 @@ StableDiffusion:
     num_groups: 32
     latent_channels: 4
     rgb_channels: &anchor 3
+    encoder_num_downblocks: 4
     encoder_input_channels: 128
     encoder_output_channels: 512
+    encoder_num_resnets: 2
+    encoder_num_downsamplers: 1
+    encoder_midblock_num_attn: 1
+
+    decoder_num_upblocks: 4
     decoder_input_channels: 512
     decoder_output_channels: *anchor
+    decoder_num_upblocks: 4
+    decoder_num_resnets: 3
+    decoder_num_upsamplers: 1
     upsample_scale_factor: 2
+    decoder_midblock_num_attn: 1
 
     
