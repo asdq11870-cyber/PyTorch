@@ -259,7 +259,7 @@ class DownBlock2D(nn.Module):
     def forward(self, x:torch.Tensor):
         pass
 
-class MidBlock2D(nn.Module):
+class UNetMidBlock2DCrossAttn(nn.Module):
     def __init__(self):
         super().__init__()
 
