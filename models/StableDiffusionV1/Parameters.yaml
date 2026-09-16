@@ -6,12 +6,12 @@ StableDiffusion:
     vocab_size: 49408
     max_seq_len: 77
     mlp_expansion: 4
-    num_encoder_layers: 12
+    num_layers: 12
 
   UNET:
     temb_channels: 1280
     heads: 12
-    resnet_eps: 1e-6
+    normalisation_eps: 1e-6
     num_groups: 32
     time_mlp_channels: 1280
     ff_expansion: 4
@@ -21,20 +21,23 @@ StableDiffusion:
     num_groups: 32
     latent_channels: 4
     rgb_channels: &anchor 3
-    encoder_num_downblocks: 4
-    encoder_input_channels: 128
-    encoder_output_channels: 512
-    encoder_num_resnets: 2
-    encoder_num_downsamplers: 1
-    encoder_midblock_num_attn: 1
 
-    decoder_num_upblocks: 4
-    decoder_input_channels: 512
-    decoder_output_channels: *anchor
-    decoder_num_upblocks: 4
-    decoder_num_resnets: 3
-    decoder_num_upsamplers: 1
-    upsample_scale_factor: 2
-    decoder_midblock_num_attn: 1
+    encoder:
+      num_downblocks: 4
+      input_channels: 128
+      output_channels: 512
+      num_resnets: 2
+      num_downsamplers: 1
+      midblock_num_attn: 1
+
+    decoder:
+      num_upblocks: 4
+      input_channels: 512
+      output_channels: *anchor
+      num_upblocks: 4
+      num_resnets: 3
+      num_upsamplers: 1
+      upsample_scale_factor: 2
+      midblock_num_attn: 1
 
     

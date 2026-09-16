@@ -232,18 +232,48 @@ class FeedForward(nn.Module):
         return self.linear_projection_2(output)
 
 class BasicTransformerBlock(nn.Module):
-    def __init__(self):
+    def __init__(self, normalisation_eps:float, temb_channels:int, heads:int, ff_expansion:int):
         super().__init__()
+        self.norm1 = nn.LayerNorm(eps=normalisation_eps)
+        self.attn1 = MultiHeadSelfAttention(temb_channels=temb_channels, heads=heads)
+        self.norm2 = nn.LayerNorm(eps=normalisation_eps)
+        self.attn2 = MultiHeadCrossAttention(temb_channels=temb_channels, heads=heads)
+        self.norm3 = nn.LayerNorm(eps=normalisation_eps)
+        self.ff = FeedForward(channels=temb_channels, ff_expansion=ff_expansion)
 
     def forward(self, x:torch.Tensor):
-        pass
+        x = self.norm1(x)
+        x = self.attn1(x)
+        x = self.norm2(x)
+        x = self.attn2(x)
+        x = self.norm3(x)
+        x = self.ff(x)
+        return x
 
 class Transformer2D(nn.Module):
-    def __init__(self):
+    def __init__(self, normalisation_eps:float, temb_channels:int, num_encoder_layers:int, num_groups:int, ff_expansion:int, heads:int):
         super().__init__()
+        self.norm = nn.GroupNorm(num_groups=num_groups, num_channels=temb_channels, eps=normalisation_eps)
+        self.proj_in = nn.Conv2d(in_channels=temb_channels, out_channels=temb_channels,
+                                 kernel_size=(3,3),stride=1, padding=1)
+        self.transformer_blocks = nn.ModuleList(
+            [
+                BasicTransformerBlock(normalisation_eps=normalisation_eps,
+                                      temb_channels=temb_channels,
+                                      ff_expansion=ff_expansion,
+                                      heads=heads)
+            ]
+            for _ in range(num_encoder_layers)
+        )
+        self.proj_out = nn.Linear(in_features=temb_channels, out_features=temb_channels)
 
     def forward(self, x:torch.Tensor):
-        pass
+        x = self.norm(x)
+        x = self.proj_in(x)
+        for block in self.transformer_blocks:
+            x = block(x)
+        x = self.proj_out(x)
+        return x
 
 class CrossAttnDownBlock2D(nn.Module):
     def __init__(self):

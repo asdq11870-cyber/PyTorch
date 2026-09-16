@@ -5,6 +5,8 @@ from diffusers import AutoencoderKL
 
 with open("Parameters.yaml", "r") as f:
     config = yaml.safe_load(f)["VAE"]
+    encoder_config = yaml.safe_load(f)["VAE"]["encoder"]
+    decoder_config = yaml.safe_load(f)["VAE"]["decoder"]
 
 class ResNet(nn.Module):
     """
@@ -261,13 +263,13 @@ class Encoder(nn.Module):
     Returns:
         An transformed image that has be downsized 
     """
-    def __init__(self, input_channels:int=config["encoder_input_channels"],
-                output_channels:int=config["encoder_output_channels"],
+    def __init__(self, input_channels:int=encoder_config["input_channels"],
+                output_channels:int=encoder_config["output_channels"],
                 rgb_channels:int=config["rgb_channels"],
                 num_groups:int=config["num_groups"],
-                num_downblocks:int=config["encoder_num_downblocks"],
-                num_resnets:int=config["encoder_num_resnets"],
-                num_downsamplers:int=config["encoder_num_downsamplers"]):
+                num_downblocks:int=encoder_config["num_downblocks"],
+                num_resnets:int=encoder_config["num_resnets"],
+                num_downsamplers:int=encoder_config["num_downsamplers"]):
         super().__init__()
         self.num_downblocks = num_downblocks
         self.input_channels = input_channels
@@ -378,11 +380,11 @@ class Decoder(nn.Module):
     """
     def __init__(self, rgb_channels:int=config["rgb_channels"],
                 latent_channels:int=config["latent_channels"],
-                input_channels:int=config["decoder_input_channels"],
+                input_channels:int=decoder_config["input_channels"],
                 num_groups:int=config["num_groups"],
-                num_upblocks:int=config["decoder_num_upblocks"],
-                num_resnets:int=config["decoder_num_resnets"],
-                num_upsamplers:int=config["decoder_num_upsamplers"]):
+                num_upblocks:int=decoder_config["num_upblocks"],
+                num_resnets:int=decoder_config["num_resnets"],
+                num_upsamplers:int=decoder_config["num_upsamplers"]):
         super().__init__()
         self.num_upblocks = num_upblocks
         self.input_channels = input_channels
@@ -527,7 +529,7 @@ class VAE(nn.Module):
         self.encoder = Encoder()
         self.decoder = Decoder()
         self.quant_conv = nn.Conv2d(
-            in_channels=config["encoder_output_channels"], out_channels=2*config["embed_dim"],
+            in_channels=encoder_config["output_channels"], out_channels=2*config["embed_dim"],
             kernel_size=(1,1), stride=1, padding=0
         )
         self.post_quant_conv = nn.Conv2d(
@@ -559,8 +561,8 @@ class VAE(nn.Module):
             )
             # ---------------------------------------------------------------------------------
             # ---------------------------------------------------------------------------------
-            for down_block_idx in range(config["encoder_num_downblocks"]):
-                for resnet_idx in range(config["encoder_num_resnets"]):
+            for down_block_idx in range(encoder_config["num_downblocks"]):
+                for resnet_idx in range(encoder_config["num_resnets"]):
                     self.encoder.down_blocks[down_block_idx][resnet_idx].groupnorm1.weight.copy_(
                         vae.encoder.down_blocks[down_block_idx].resnets[resnet_idx].norm1.weight
                     )
@@ -591,8 +593,8 @@ class VAE(nn.Module):
                     self.encoder.down_blocks[down_block_idx][resnet_idx].residual_conv.bias.copy_(
                         vae.encoder.down_blocks[down_block_idx].resnets[resnet_idx].conv_shortcut.bias
                     )
-                for downsample_idx in range(config["encoder_num_downsamplers"]):
-                    if down_block_idx != config["encoder_num_downblocks"]:
+                for downsample_idx in range(encoder_config["num_downsamplers"]):
+                    if down_block_idx != encoder_config["num_downblocks"]:
                         self.encoder.down_blocks[down_block_idx][downsample_idx].downsampling_conv.weight.copy_(
                             vae.encoder.down_blocks[down_block_idx].downsamplers[downsample_idx].conv.weight
                         )
@@ -601,7 +603,7 @@ class VAE(nn.Module):
                         )
                     else: continue
 
-            for resnet_idx in range(config["encoder_num_resnets"]):
+            for resnet_idx in range(encoder_config["num_resnets"]):
                 if resnet_idx == 1: idx = 1
                 self.encoder.middle_block[resnet_idx+idx].groupnorm1.weight.copy_(
                     vae.encoder.mid_block.resnets[resnet_idx].norm1.weight
@@ -665,8 +667,8 @@ class VAE(nn.Module):
             )
             # ---------------------------------------------------------------------------------
             # ---------------------------------------------------------------------------------
-            for up_block_idx in range(config["decoder_num_upblocks"]):
-                for resnet_idx in range(config["decoder_num_resnets"]):
+            for up_block_idx in range(decoder_config["num_upblocks"]):
+                for resnet_idx in range(decoder_config["num_resnets"]):
                     self.decoder.up_blocks[up_block_idx][resnet_idx].groupnorm1.weight.copy_(
                         vae.decoder.up_blocks[up_block_idx].resnets[resnet_idx].norm1.weight
                     )
@@ -697,8 +699,8 @@ class VAE(nn.Module):
                     self.decoder.up_blocks[up_block_idx][resnet_idx].residual_conv.bias.copy_(
                         vae.decoder.up_blocks[up_block_idx].resnets[resnet_idx].conv_shortcut.bias
                     )
-                for upsample_idx in range(config["decoder_num_upsamplers"]):
-                    if up_block_idx != config["decoder_num_upblocks"]:
+                for upsample_idx in range(decoder_config["num_upsamplers"]):
+                    if up_block_idx != decoder_config["num_upblocks"]:
                         self.decoder.up_blocks[up_block_idx][upsample_idx].upsampling_conv.weight.copy_(
                             vae.decoder.up_blocks[up_block_idx].upsamplers[upsample_idx].conv.weight
                         )
@@ -707,7 +709,7 @@ class VAE(nn.Module):
                         )
                     else: continue
 
-            for resnet_idx in range(config["decoder_num_resnets"]):
+            for resnet_idx in range(decoder_config["num_resnets"]):
                 if resnet_idx == 1: idx = 1
                 self.decoder.middle_block[resnet_idx+idx].groupnorm1.weight.copy_(
                     vae.decoder.mid_block.resnets[resnet_idx].norm1.weight
