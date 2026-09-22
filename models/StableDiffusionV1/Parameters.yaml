@@ -9,19 +9,20 @@ StableDiffusion:
     num_layers: 12
 
   UNET:
-    temb_channels: 1280
+    input_conv_channels: 320
+    temb_channels: &a 1280
     heads: 12
     transformer2d_num_encoder_layers: 12
     normalisation_eps: 1e-6
     num_groups: 32
-    time_mlp_channels: 1280
+    time_mlp_channels: *a
     ff_expansion: 4
     upsample_scale_factor: 2
 
   VAE:
     num_groups: 32
     latent_channels: 4
-    rgb_channels: &anchor 3
+    rgb_channels: &b 3
 
     encoder:
       num_downblocks: 4
@@ -34,7 +35,7 @@ StableDiffusion:
     decoder:
       num_upblocks: 4
       input_channels: 512
-      output_channels: *anchor
+      output_channels: *b
       num_upblocks: 4
       num_resnets: 3
       num_upsamplers: 1

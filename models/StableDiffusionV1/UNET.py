@@ -1,14 +1,11 @@
 import torch
 from torch import nn
-from models.StableDiffusionV1.CLIPTransformer import CLIPTransformer
-from transformers import CLIPTokenizer
 from diffusers import UNet2DConditionModel
-from typing import Tuple
 import yaml
 
 with open("Parameters.yaml","r") as f:
     unet_config = yaml.safe_load(f)["UNET"]
-    clip_config = yaml.safe_load(f)["CLIP"]
+    vae_config = yaml.safe_load(f)["VAE"]
 
 class TimestepEmbedding(nn.Module):
     """
@@ -279,6 +276,8 @@ class Transformer2D(nn.Module):
 class CrossAttnDownBlock2D(nn.Module):
     def __init__(self, input_channels:int,
                 output_channels:int,
+                resnet_input_channels:int,
+                resnet_output_channels:int,
                 num_groups:int=unet_config["num_groups"],
                 eps:float=unet_config["normalisation_eps"],
                 expanded_channels:int=unet_config["time_mlp_channels"],
@@ -287,66 +286,202 @@ class CrossAttnDownBlock2D(nn.Module):
                 heads:int=unet_config["heads"],
                 num_encoder_layers:int=unet_config["transformer2d_num_encoder_layers"]):
         super().__init__()
-        self.resnet = ResNet(in_channels=input_channels, out_channels=output_channels,
+        self.resnet = ResNet(in_channels=resnet_input_channels, out_channels=resnet_output_channels,
                              expanded_channels=expanded_channels, num_groups=num_groups,
                              resnet_eps=eps)
-        self.transformer_2d = Transformer2D(normalisation_eps=eps,temb_channels=temb_channels,
+        self.attn = Transformer2D(normalisation_eps=eps,temb_channels=temb_channels,
                                             num_encoder_layers=num_encoder_layers, ff_expansion=ff_expansion,
                                             heads=heads)
         self.downsample = Downsample(input_channels=input_channels,output_channels=output_channels)
-    def forward(self, x:torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
-        residual = x
+
+    def forward(self, x:torch.Tensor, context:torch.Tensor)-> tuple[torch.Tensor, tuple[torch.Tensor, ...]]:
         x = self.resnet(x)
-        
+        x = self.attn(x,context)
+        output_states = ()
+        output_states += (x,)
+        x = self.downsample(x)
+        return x, output_states
         
 class DownBlock2D(nn.Module):
-    def __init__(self, input_channels:int, output_channels:int):
+    def __init__(self, input_channels:int,
+                 output_channels:int,
+                resnet_input_channels:int,
+                resnet_output_channels:int,
+                 expanded_channels:int=unet_config["time_mlp_channels"],
+                 eps:float=unet_config["normalisation_eps"],
+                 num_groups:int=unet_config["num_groups"]):
         super().__init__()
+        self.resnet = ResNet(in_channels=resnet_input_channels, out_channels=resnet_output_channels,
+                             expanded_channels=expanded_channels, num_groups=num_groups,
+                             resnet_eps=eps)
+        self.downsample = Downsample(input_channels=input_channels,output_channels=output_channels)
 
-    def forward(self, x:torch.Tensor):
-        pass
+    def forward(self, x:torch.Tensor)-> tuple[torch.Tensor, tuple[torch.Tensor, ...]]:
+        x = self.resnet(x)
+        output_states = ()
+        output_states += (x,)
+        x = self.downsample(x)
+        return x, output_states
 
 class UNetMidBlock2DCrossAttn(nn.Module):
-    def __init__(self):
+    def __init__(self,
+                resnet_input_channels:int,
+                resnet_output_channels:int,
+                num_groups:int=unet_config["num_groups"],
+                eps:float=unet_config["normalisation_eps"],
+                expanded_channels:int=unet_config["time_mlp_channels"],
+                temb_channels:int=unet_config["temb_channels"],
+                ff_expansion:int=unet_config["ff_expansion"],
+                heads:int=unet_config["heads"],
+                num_encoder_layers:int=unet_config["transformer2d_num_encoder_layers"]):
         super().__init__()
+        self.resnets = nn.ModuleList([
+            ResNet(in_channels=resnet_input_channels, out_channels=resnet_output_channels,
+                   expanded_channels=expanded_channels, num_groups=num_groups,
+                   resnet_eps=eps),
+            ResNet(in_channels=resnet_input_channels, out_channels=resnet_output_channels,
+                    expanded_channels=expanded_channels, num_groups=num_groups,
+                    resnet_eps=eps)
+        ])
+        self.attn = Transformer2D(normalisation_eps=eps,temb_channels=temb_channels,
+                                  num_encoder_layers=num_encoder_layers,num_groups=num_groups,
+                                  ff_expansion=ff_expansion,heads=heads)
 
-    def forward(self, x:torch.Tensor):
-        pass
+    def forward(self, x:torch.Tensor, context:torch.Tensor)-> tuple[torch.Tensor, tuple[torch.Tensor, ...]]:
+        x = self.resnets[0]
+        x = self.attn(x,context)
+        x = self.resnets[1]
+        return x
 
 class CrossAttnUpBlock2D(nn.Module):
-    def __init__(self):
+    def __init__(self, input_channels:int,
+                output_channels:int,
+                resnet_input_channels:int,
+                resnet_output_channels:int,
+                num_groups:int=unet_config["num_groups"],
+                eps:float=unet_config["normalisation_eps"],
+                expanded_channels:int=unet_config["time_mlp_channels"],
+                temb_channels:int=unet_config["temb_channels"],
+                upsample_scale_factor:int=unet_config["upsample_scale_factor"],
+                ff_expansion:int=unet_config["ff_expansion"],
+                heads:int=unet_config["heads"],
+                num_encoder_layers:int=unet_config["transformer2d_num_encoder_layers"]):
         super().__init__()
+        self.resnets = ResNet(in_channels=resnet_input_channels, out_channels=resnet_output_channels,
+                    expanded_channels=expanded_channels, num_groups=num_groups,
+                   resnet_eps=eps)
+        self.attn = Transformer2D(normalisation_eps=eps,temb_channels=temb_channels,
+                                  num_encoder_layers=num_encoder_layers,num_groups=num_groups,
+                                  ff_expansion=ff_expansion,heads=heads)
+        self.upsample = Upsample(input_channels=input_channels, output_channels=output_channels,
+                                 scale_factor=upsample_scale_factor)
 
-    def forward(self, x:torch.Tensor):
-        pass
+    def forward(self, x:torch.Tensor, output_states:torch.Tensor):
+        x += (output_states,)
+        x = self.resnets(x)
+        x = self.attn(x)
+        x = self.upsample(x)
+        return x
 
 class UpBlock2D(nn.Module):
-    def __init__(self):
+    def __init__(self, input_channels:int,
+                 output_channels:int,
+                resnet_input_channels:int,
+                resnet_output_channels:int,
+                 expanded_channels:int=unet_config["temb_channels"],
+                 eps:float=unet_config["normalisation_eps"],
+                 num_groups:int=unet_config["num_groups"],
+                 upsample_scale_factor:int=unet_config["upsample_scale_factor"]):
         super().__init__()
-
-    def forward(self, x:torch.Tensor):
-        pass
-
-class Encoder(nn.Module):
-    def __init__(self):
-        super().__init__()
-
-    def forward(self, x:torch.Tensor):
-        pass
-
-class Decoder(nn.Module):
-    def __init__(self):
-        super().__init__()
-
-    def forward(self, x:torch.Tensor):
-        pass
+        self.resnets = ResNet(in_channels=resnet_input_channels, out_channels=resnet_output_channels,
+                    expanded_channels=expanded_channels, num_groups=num_groups,
+                    resnet_eps=eps)
+        self.upsample = Upsample(input_channels=input_channels, output_channels=output_channels,
+                                    scale_factor=upsample_scale_factor)
+    def forward(self, x:torch.Tensor, output_states:torch.Tensor):
+        x += (output_states,)
+        x = self.resnets(x)
+        x = self.upsample(x)
+        return x
 
 class UNET(nn.Module):
-    def __init__(self):
+    def __init__(self, latent_channels:int=vae_config["latent_channels"],
+                 input_channels:int=unet_config["input_conv_channels"]):
         super().__init__()
+        self.input_channels = input_channels # 320
+        self.input_channelsx2 = input_channels * 2 # 640
+        self.input_channelsx4 = input_channels * 4 # 1280
+        self.input_conv = nn.Conv2d(
+            in_channels=latent_channels, out_channels=input_channels,
+            kernel_size=(1,1),stride=1,padding=0
+        )
+        self.down_blocks = nn.ModuleList([
+            CrossAttnDownBlock2D(input_channels=self.input_channels,
+                                output_channels=self.input_channels,
+                                resnet_input_channels=self.input_channels,
+                                resnet_output_channels=self.input_channels),
 
-    def forward(self, x:torch.Tensor):
-        pass
+            CrossAttnDownBlock2D(input_channels=self.input_channels,
+                                output_channels=self.input_channelsx2,
+                                resnet_input_channels=self.input_channels,
+                                resnet_output_channels=self.input_channels),
+
+            CrossAttnDownBlock2D(input_channels=self.input_channelsx2,
+                                output_channels=self.input_channelsx4,
+                                resnet_input_channels=self.input_channelsx2,
+                                resnet_output_channels=self.input_channelsx2),
+
+            DownBlock2D(input_channels=self.input_channelsx4,
+                        output_channels=self.input_channelsx4,
+                        resnet_input_channels=self.input_channelsx4,
+                        resnet_output_channels=self.input_channelsx4)
+        ])
+        self.mid_block = UNetMidBlock2DCrossAttn(
+            resnet_input_channels=self.input_channelsx4,
+            resnet_output_channels=self.input_channelsx4
+        )
+        self.up_blocks = nn.ModuleList([
+            UpBlock2D(input_channels=self.input_channelsx4,
+                    output_channels=self.input_channelsx4,
+                    resnet_input_channels=self.input_channelsx4,
+                    resnet_output_channels=self.input_channelsx4),
+
+            CrossAttnUpBlock2D(input_channels=self.input_channelsx4,
+                                output_channels=self.input_channelsx4,
+                                resnet_input_channels=self.input_channelsx4,
+                                resnet_output_channels=self.input_channelsx4),
+
+            CrossAttnUpBlock2D(input_channels=self.input_channelsx4,
+                                output_channels=self.input_channelsx2,
+                                resnet_input_channels=self.input_channelsx4,
+                                resnet_output_channels=self.input_channelsx4),
+
+            CrossAttnUpBlock2D(input_channels=self.input_channelsx2,
+                                output_channels=self.input_channels,
+                                resnet_input_channels=self.input_channelsx2,
+                                resnet_output_channels=self.input_channelsx2)
+        ])
+        self.output_conv = nn.Conv2d(
+            in_channels=self.input_channels,
+            out_channels=latent_channels,
+            kernel_size=(1,1), stride=1, padding=0
+        )
+
+    def forward(self, x:torch.Tensor, context:torch.Tensor):
+        x = self.input_conv(x)
+        x, output0 = self.down_blocks[0](x, context)
+        x, output1 = self.down_blocks[1](x, context)
+        x, output2 = self.down_blocks[2](x, context)
+        x, output3 = self.down_blocks[3](x, context)
+        x = self.mid_block(x)
+        x = self.up_blocks[0](x, output3)
+        x = self.up_blocks[1](x, output2)
+        x = self.up_blocks[2](x, output1)
+        x = self.up_blocks[3](x, output0)
+        x = self.output_conv(x)
+        return x
 
     def load_pretrained(self):
-        pass
+        unet = UNet2DConditionModel().from_pretrained("runwayml/stable-diffusion-v1-5")
+        with torch.no_grad():
+            pass
