@@ -11,6 +11,7 @@ StableDiffusion:
   UNET:
     temb_channels: 1280
     heads: 12
+    transformer2d_num_encoder_layers: 12
     normalisation_eps: 1e-6
     num_groups: 32
     time_mlp_channels: 1280

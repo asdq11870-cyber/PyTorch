@@ -3,6 +3,7 @@ from torch import nn
 from models.StableDiffusionV1.CLIPTransformer import CLIPTransformer
 from transformers import CLIPTokenizer
 from diffusers import UNet2DConditionModel
+from typing import Tuple
 import yaml
 
 with open("Parameters.yaml","r") as f:
@@ -119,12 +120,12 @@ class ResNet(nn.Module):
         self.groupnorm2 = nn.GroupNorm(num_groups=num_groups, num_channels=out_channels, eps=resnet_eps)
         self.dropout = nn.Dropout2d(p=0.5)
 
-    def forward(self, x:torch.Tensor, timestep_vector:torch.Tensor) -> torch.Tensor:
+    def forward(self, x:torch.Tensor, temb:torch.Tensor) -> torch.Tensor:
         residual = x
         x = self.groupnorm1(x)
         x = self.silu1(x)
         x = self.conv1(x)
-        t = timestep_vector
+        t = temb
         t = self.timestep_projection(t)
         t = t.reshape(t.shape[0],t.shape[1],1,1)
         x = x + t
@@ -276,11 +277,27 @@ class Transformer2D(nn.Module):
         return x
 
 class CrossAttnDownBlock2D(nn.Module):
-    def __init__(self):
+    def __init__(self, input_channels:int,
+                output_channels:int,
+                num_groups:int=unet_config["num_groups"],
+                eps:float=unet_config["normalisation_eps"],
+                expanded_channels:int=unet_config["time_mlp_channels"],
+                temb_channels:int=unet_config["temb_channels"],
+                ff_expansion:int=unet_config["ff_expansion"],
+                heads:int=unet_config["heads"],
+                num_encoder_layers:int=unet_config["transformer2d_num_encoder_layers"]):
         super().__init__()
-
-    def forward(self, x:torch.Tensor):
-        pass
+        self.resnet = ResNet(in_channels=input_channels, out_channels=output_channels,
+                             expanded_channels=expanded_channels, num_groups=num_groups,
+                             resnet_eps=eps)
+        self.transformer_2d = Transformer2D(normalisation_eps=eps,temb_channels=temb_channels,
+                                            num_encoder_layers=num_encoder_layers, ff_expansion=ff_expansion,
+                                            heads=heads)
+        self.downsample = Downsample(input_channels=input_channels,output_channels=output_channels)
+    def forward(self, x:torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+        residual = x
+        x = self.resnet(x)
+        
         
 class DownBlock2D(nn.Module):
     def __init__(self, input_channels:int, output_channels:int):
@@ -310,10 +327,23 @@ class UpBlock2D(nn.Module):
     def forward(self, x:torch.Tensor):
         pass
 
+class Encoder(nn.Module):
+    def __init__(self):
+        super().__init__()
+
+    def forward(self, x:torch.Tensor):
+        pass
+
+class Decoder(nn.Module):
+    def __init__(self):
+        super().__init__()
+
+    def forward(self, x:torch.Tensor):
+        pass
+
 class UNET(nn.Module):
     def __init__(self):
         super().__init__()
-        tokenizer = CLIPTokenizer.from_pretrained("openai/clip-vit-large-patch14")
 
     def forward(self, x:torch.Tensor):
         pass
