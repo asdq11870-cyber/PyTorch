@@ -1,0 +1,9 @@
+VisionMamba:
+  image_size: 224
+  in_channels: 3
+  num_classes: 3
+  patch_size: 16
+  embed_dim: 768
+  num_encoder_layers: 12
+  expand_dim: 3072
+  ssd_dim: 16

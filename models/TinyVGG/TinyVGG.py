@@ -1,5 +1,9 @@
 import torch
 from torch import nn
+import yaml
+
+with open("Parameters.yaml","r") as f:
+  config = yaml.safe_load(f)
 
 class TinyVGG(nn.Module):
   """
@@ -14,7 +18,9 @@ class TinyVGG(nn.Module):
   Returns:
     A tensor that has gone through the convulution layers and the classifier layer
   """
-  def __init__(self,input:int, hidden:int, output:int):
+  def __init__(self,input:int=config["input_channels"],
+              hidden:int=config["hidden_channels"],
+              output:int=config["output_channels"]):
     super().__init__()
     self.relu = nn.ReLU()
     self.conv_layer_1 = nn.Sequential(

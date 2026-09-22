@@ -1,0 +1,8 @@
+NanoGPT:
+  embed_dim: 768
+  heads: 12
+  mlp_dim: 3072
+  mlp_dropout: 0.0
+  attn_dropout: 0.0
+  num_encoder_layers: 12
+  context_length: 1024

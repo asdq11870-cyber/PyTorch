@@ -1,6 +1,10 @@
 import torch
 from torch import nn
 import torch.nn.functional as F
+import yaml
+
+with open("Parameters.yaml","r") as f:
+  config = yaml.safe_load(f)
 
 class PatchEmbedding(nn.Module):
   """
@@ -105,8 +109,8 @@ class VisionMambaEncoder(nn.Module):
     self.Z_projection = nn.Linear(in_features=embed_dim,out_features=expand_dim)
     self.Y_projection = nn.Linear(in_features=expand_dim, out_features=embed_dim)
 
-    self.conv_layer_1 = nn.Conv1d(in_channels=expand_dim, out_channels=expand_dim,kernel=3,padding=1)
-    self.conv_layer_2 = nn.Conv1d(in_channels=expand_dim, out_channels=expand_dim,kernel=3,padding=1)
+    self.conv_layer_1 = nn.Conv1d(in_channels=expand_dim, out_channels=expand_dim,kernel_size=3,padding=1,stride=1)
+    self.conv_layer_2 = nn.Conv1d(in_channels=expand_dim, out_channels=expand_dim,kernel_size=3,padding=1,stride=1)
 
     self.forward_ssm = SelectiveSSM(
       embed_dim=expand_dim,
@@ -145,9 +149,14 @@ class VisionMambaEncoder(nn.Module):
 
 
 class VisionMamba(nn.Module):
-  def __init__(self, image_size, patch_size, in_channels,
-                embed_dim, num_classes, num_encoder_layers,
-                expand_dim, ssm_dim):
+  def __init__(self, image_size:int=config["image_size"],
+              patch_size:int=config["patch_size"],
+              in_channels:int=config["in_channels"],
+              embed_dim:int=config["embed_dim"],
+              num_classes:int=config["num_classes"],
+              num_encoder_layers:int=config["num_encoder_layers"],
+              expand_dim:int=config["expand_dim"],
+              ssm_dim:int=config["ssm_dim"]):
     super().__init__()
 
     assert image_size % patch_size == 0

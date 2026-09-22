@@ -1,5 +1,9 @@
 import torch
 from torch import nn
+import yaml
+
+with open("Parameters.yaml") as f:
+   config = yaml.safe_load(f)
 
 class TokenEmbedding(nn.Module):
   def __init__(self, vocab_size, embed_dim):
@@ -148,10 +152,14 @@ class GPTTransformBlock(nn.Module):
 
 
 class GPT(nn.Module):
-  def __init__(self, vocab_size,
-                embed_dim, heads, mlp_dim,
-                  mlp_dropout, attn_dropout,
-                    num_encoder_layers, context_length):
+  def __init__(self, vocab_size:int,
+              embed_dim:int=config["embed_dim"],
+              heads:int=config["heads"],
+              mlp_dim:int=config["mlp_dim"],
+              mlp_dropout:float=config["mlp_dropout"],
+              attn_dropout:float=config["attn_dropout"],
+              num_encoder_layers:int=config["num_encoder_layers"],
+              context_length:int=config["context_length"]):
     
     super().__init__()
     self.vocab_size = vocab_size

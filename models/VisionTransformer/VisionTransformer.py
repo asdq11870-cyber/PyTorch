@@ -1,5 +1,10 @@
 import torch
 from torch import nn
+from torchvision import models as models
+import yaml
+
+with open("Parameters.yaml","r") as f:
+  config = yaml.safe_load(f)
 
 class PatchEmbedding(nn.Module):
   """
@@ -173,13 +178,41 @@ class TransformEncoderBlock(nn.Module):
     return x
 
 class ViT(nn.Module):
-  def __init__(self, image_size, patch_size, in_channels,
-                embed_dim, heads, mlp_dim, num_classes, num_encoder_layers,
-                attn_dropout, mlp_dropout, emb_dropout):
+  """
+  The final implementation of the ViT
+
+  Args:
+    image_size: The image dimensions
+    patch_size: The patch dimensions
+    in_channels: The images input channels (3 for rgb)
+    embed_dim: The embedding dimension
+    mlp_dim: Expansion for multilayer preceptron
+    num_classes: The amount of image classes
+    num_encoder_layers: The number of transformer encoder blocks
+    attn_dropout: Dropout probability in attention
+    mlp_dropout: Dropout probability in feed forward
+    emb_dropout: Dropout probability for the token weights
+
+    Returns:
+      Tensor logits for each class
+    """
+  def __init__(self, image_size:int=config["image_size"],
+              patch_size:int=config["patch_size"],
+              in_channels:int=config["in_channels"],
+              embed_dim:int=config["embed_dim"],
+              heads:int=config["heads"],
+              mlp_dim:int=config["mlp_dim"],
+              num_classes:int=config["num_classes"],
+              num_encoder_layers:int=config["num_encoder_layers"],
+              attn_dropout:float=config["attn_dropout"],
+              mlp_dropout:float=config["mlp_dropout"],
+              emb_dropout:float=config["emb_dropout"]):
     super().__init__()
 
     assert image_size % patch_size == 0
     self.num_patch = (image_size ** 2) // (patch_size ** 2)
+
+    self.num_encoder_layers = num_encoder_layers
 
     self.patch_embedding = PatchEmbedding(
       patch_size=patch_size,
@@ -227,3 +260,32 @@ class ViT(nn.Module):
     x = x[:,0]
     x = self.mlp_head(x)
     return x
+
+  def load_pretrained(self):
+    vit = models.vit_b_16(weights=models.ViT_B_16_Weights)
+    with torch.no_grad():
+      self.mlp_head.weight.copy_(
+         vit.heads.head.weight
+      )
+      self.mlp_head.bias.copy_(
+          vit.heads.head.bias
+      )
+      self.patch_embedding.create_patches.weight.copy_(
+        vit.conv_proj.weight
+      )
+      self.patch_embedding.create_patches.bias.copy_(
+         vit.conv_proj.bias
+      )
+      self.norm.weight.copy_(
+         vit.encoder.ln.weight
+      )
+      self.norm.bias.copy_(
+         vit.encoder.ln.bias
+      )
+      for i in range(self.num_encoder_layers):
+         self.encoder_blocks[i].norm1.weight.copy_(
+            vit.encoder.layers[i].ln_1.weight
+         )
+         self.encoder_blocks[i].norm1.bias.copy_(
+            vit.encoder.layers[i].ln_1.bias
+         )

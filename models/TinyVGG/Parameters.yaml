@@ -1,0 +1,4 @@
+TINYVGG:
+  input_channels: 3
+  hidden_channels: 10
+  output_channels: 10
