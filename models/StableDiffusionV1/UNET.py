@@ -4,8 +4,8 @@ from diffusers import UNet2DConditionModel
 import yaml
 
 with open("Parameters.yaml","r") as f:
-    unet_config = yaml.safe_load(f)["UNET"]
-    vae_config = yaml.safe_load(f)["VAE"]
+    unet_config = yaml.safe_load(f)["StableDiffusion"]["UNET"]
+    vae_config = yaml.safe_load(f)["StableDiffusion"]["VAE"]
 
 class TimestepEmbedding(nn.Module):
     """

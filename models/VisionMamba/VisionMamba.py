@@ -2,9 +2,12 @@ import torch
 from torch import nn
 import torch.nn.functional as F
 import yaml
+import os
+script_dir = os.path.dirname(os.path.abspath(__file__))
+yaml_path = os.path.join(script_dir,"Parameters.yaml")
 
-with open("Parameters.yaml","r") as f:
-  config = yaml.safe_load(f)
+with open(yaml_path,"r") as f:
+	config = yaml.safe_load(f)["VisionMamba"]
 
 class PatchEmbedding(nn.Module):
   """

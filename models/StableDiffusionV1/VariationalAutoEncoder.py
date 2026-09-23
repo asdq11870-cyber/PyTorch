@@ -4,9 +4,9 @@ import yaml
 from diffusers import AutoencoderKL
 
 with open("Parameters.yaml", "r") as f:
-    config = yaml.safe_load(f)["VAE"]
-    encoder_config = yaml.safe_load(f)["VAE"]["encoder"]
-    decoder_config = yaml.safe_load(f)["VAE"]["decoder"]
+    config = yaml.safe_load(f)["StableDiffusion"]["VAE"]
+    encoder_config = yaml.safe_load(f)["StableDiffusion"]["VAE"]["encoder"]
+    decoder_config = yaml.safe_load(f)["StableDiffusion"]["VAE"]["decoder"]
 
 class ResNet(nn.Module):
     """

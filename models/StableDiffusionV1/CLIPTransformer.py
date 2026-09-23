@@ -5,7 +5,7 @@ from transformers import CLIPTextModel
 import yaml
 
 with open("Parameters.yaml","r") as f:
-    config = yaml.safe_load(f)["CLIP"]
+    config = yaml.safe_load(f)["StableDiffusion"]["CLIP"]
 
 class Embedding(nn.Module):
     """
