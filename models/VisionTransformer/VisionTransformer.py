@@ -266,7 +266,7 @@ class ViT(nn.Module):
 		return x
 
 	def load_pretrained(self):
-		vit = models.vit_b_16(weights=models.ViT_B_16_Weights)
+		vit = models.vit_b_16(weights=models.ViT_B_16_Weights.DEFAULT)
 		vit.heads.head = nn.Linear(
 			in_features=1000, out_features=self.num_classes
 		)
