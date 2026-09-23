@@ -217,6 +217,7 @@ class ViT(nn.Module):
 
 		self.num_encoder_layers = num_encoder_layers
 		self.num_classes = num_classes
+		self.embed_dim = embed_dim
 
 		self.patch_embedding = PatchEmbedding(
 		patch_size=patch_size,
@@ -267,16 +268,7 @@ class ViT(nn.Module):
 
 	def load_pretrained(self):
 		vit = models.vit_b_16(weights=models.ViT_B_16_Weights.DEFAULT)
-		vit.heads.head = nn.Linear(
-			in_features=1000, out_features=self.num_classes
-		)
 		with torch.no_grad():
-			self.mlp_head.weight.copy_(
-				vit.heads.head.weight
-			)
-			self.mlp_head.bias.copy_(
-				vit.heads.head.bias
-			)
 			self.patch_embedding.create_patches.weight.copy_(
 				vit.conv_proj.weight
 			)
