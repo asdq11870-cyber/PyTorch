@@ -307,14 +307,15 @@ class ViT(nn.Module):
 					vit.encoder.layers[i].self_attention.out_proj.bias
 				)
 				self.encoder_blocks[i].mlp.layer[0].weight.copy_(
-					vit.encoder.layers[i].mlp.layers[0].weight
+					vit.encoder.layers[i].mlp[0].weight
 				)
 				self.encoder_blocks[i].mlp.layer[0].bias.copy_(
-					vit.encoder.layers[i].mlp.layers[0].bias
+					vit.encoder.layers[i].mlp[0].bias
 				)
 				self.encoder_blocks[i].mlp.layer[3].weight.copy_(
-					vit.encoder.layers[i].mlp.layers[3].weight
+					vit.encoder.layers[i].mlp[3].weight
 				)
 				self.encoder_blocks[i].mlp.layer[3].bias.copy_(
-					vit.encoder.layers[i].mlp.layers[3].bias
+					vit.encoder.layers[i].mlp[3].bias
 				)
+		return self
