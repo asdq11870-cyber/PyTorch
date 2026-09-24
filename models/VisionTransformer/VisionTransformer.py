@@ -295,18 +295,10 @@ class ViT(nn.Module):
 					vit.encoder.layers[i].ln_2.bias
 				)
 				self.encoder_blocks[i].attention.query_key_value.weight.copy_(
-					torch.cat([
-						vit.encoder.layers[i].self_attention.q_proj_weight,
-						vit.encoder.layers[i].self_attention.k_proj_weight,
-						vit.encoder.layers[i].self_attention.v_proj_weight,
-					],dim=0)
+					vit.encoder.layers[i].self_attention.in_proj_weight
 				)
 				self.encoder_blocks[i].attention.query_key_value.bias.copy_(
-					torch.cat([
-						vit.encoder.layers[i].self_attention.q_proj_bias,
-						vit.encoder.layers[i].self_attention.k_proj_bias,
-						vit.encoder.layers[i].self_attention.v_proj_bias,
-					],dim=0)
+					vit.encoder.layers[i].self_attention.in_proj_bias
 				)
 				self.encoder_blocks[i].attention.projection.weight.copy_(
 					vit.encoder.layers[i].self_attention.out_proj.weight
